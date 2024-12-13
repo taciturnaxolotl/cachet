@@ -6,7 +6,7 @@
 </h1>
 
 <p align="center">
-    <i><b>noun</b/ - A mark or quality, as of distinction, individuality, or authenticity.</i>
+    <i><b>noun</b> - A mark or quality, as of distinction, individuality, or authenticity.</i>
 </p>
 
 <p align="center">
