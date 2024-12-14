@@ -11,13 +11,18 @@ const cache = new SlackCache(
   process.env.DATABASE_PATH ?? "./data/cachet.db",
   24,
   async () => {
+    console.log("Fetching emojis from Slack");
     const emojis = await slackApp.getEmojiList();
     const emojiEntries = Object.entries(emojis).map(([name, url]) => ({
       name,
-      url,
+      imageUrl: url,
     }));
 
-    await cache.batchInsertEmojis(emojiEntries);
+    console.log("Batch inserting emojis");
+
+    await cache.batchInsertEmoji(emojiEntries);
+
+    console.log("Finished batch inserting emojis");
   },
 );
 
