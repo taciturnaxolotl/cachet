@@ -24,7 +24,7 @@ const slackApp = new SlackApp({
   startLazyListenerAfterAck: true,
 });
 
-const cache = new SlackCache();
+const cache = new SlackCache(process.env.DATABASE_PATH ?? "./data/cachet.db");
 
 const app = new Elysia()
   .use(
@@ -147,7 +147,7 @@ const app = new Elysia()
       },
     },
   )
-  .listen(3000);
+  .listen(process.env.PORT ?? 3000);
 
 console.log(
   `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port} at ${version}`,

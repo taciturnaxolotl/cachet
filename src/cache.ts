@@ -44,10 +44,10 @@ class Cache {
 
   /**
    * Creates a new Cache instance
-   * @param dbPath Path to SQLite database file, defaults to in-memory
+   * @param dbPath Path to SQLite database file
    * @param defaultExpirationHours Default cache expiration in hours
    */
-  constructor(dbPath = ":memory:", defaultExpirationHours = 24) {
+  constructor(dbPath: string, defaultExpirationHours = 24) {
     this.db = new Database(dbPath);
     this.defaultExpiration = defaultExpirationHours;
 

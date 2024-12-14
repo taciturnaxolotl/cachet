@@ -30,7 +30,8 @@ Your `.env` file should look like this:
 ```bash
 SLACK_TOKEN=xoxb-123456789012-123456789012-123456789012-123456789012
 SLACK_SIGNING_SECRET=12345678901234567890123456789012
-PORT=3000
+DATABASE_PATH=/path/to/db.sqlite # Optional
+PORT=3000 # Optional
 ```
 
 The slack app can be created from the [`manifest.yaml`](./manifest.yaml) in this repo. It just needs the `emoji:read` and `users:read` scopes.
