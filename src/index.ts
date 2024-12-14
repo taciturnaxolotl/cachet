@@ -184,16 +184,29 @@ const app = new Elysia()
       }),
       response: {
         404: t.Object({
-          message: t.String(),
+          message: t.String({
+            default: "User not found",
+          }),
         }),
         500: t.Object({
-          message: t.String(),
+          message: t.String({
+            default: "Error fetching user from Slack",
+          }),
         }),
         200: t.Object({
-          id: t.String(),
-          expiration: t.String(),
-          user: t.String(),
-          image: t.String(),
+          id: t.String({
+            default: "90750e24-c2f0-4c52-8681-e6176da6e7ab",
+          }),
+          expiration: t.String({
+            default: new Date().toISOString(),
+          }),
+          user: t.String({
+            default: "U12345678",
+          }),
+          image: t.String({
+            default:
+              "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
+          }),
         }),
       },
     },
@@ -213,6 +226,30 @@ const app = new Elysia()
     },
     {
       tags: ["Slack"],
+      response: {
+        200: t.Array(
+          t.Object({
+            id: t.String({
+              default: "5427fe70-686f-4684-9da5-95d9ef4c1090",
+            }),
+            expiration: t.String({
+              default: new Date().toISOString(),
+            }),
+            name: t.String({
+              default: "blahaj-heart",
+            }),
+            alias: t.Optional(
+              t.String({
+                default: "blobhaj-heart",
+              }),
+            ),
+            image: t.String({
+              default:
+                "https://emoji.slack-edge.com/T0266FRGM/blahaj-heart/db9adf8229e9a4fb.png",
+            }),
+          }),
+        ),
+      },
     },
   )
   .get(
@@ -237,13 +274,24 @@ const app = new Elysia()
       }),
       response: {
         404: t.Object({
-          message: t.String(),
+          message: t.String({
+            default: "Emoji not found",
+          }),
         }),
         200: t.Object({
-          id: t.String(),
-          expiration: t.String(),
-          name: t.String(),
-          image: t.String(),
+          id: t.String({
+            default: "9ed0a560-928d-409c-89fc-10fe156299da",
+          }),
+          expiration: t.String({
+            default: new Date().toISOString(),
+          }),
+          name: t.String({
+            default: "orphmoji-yay",
+          }),
+          image: t.String({
+            default:
+              "https://emoji.slack-edge.com/T0266FRGM/orphmoji-yay/23a37f4af47092d3.png",
+          }),
         }),
       },
     },
