@@ -130,7 +130,7 @@ const app = new Elysia()
       };
     },
     {
-      tags: ["Users"],
+      tags: ["Slack"],
       params: t.Object({
         user: t.String(),
       }),
