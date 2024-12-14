@@ -216,6 +216,65 @@ class Cache {
   }
 
   /**
+   * Batch inserts multiple emojis into the cache
+   * @param emojis Array of {name, imageUrl} objects to insert
+   * @param expirationHours Optional custom expiration time in hours for all emojis
+   * @returns boolean indicating if all insertions were successful
+   */
+  async batchInsertEmoji(
+    emojis: Array<{ name: string; imageUrl: string }>,
+    expirationHours?: number,
+  ): Promise<boolean> {
+    try {
+      const expiration =
+        Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
+
+      this.db.transaction(() => {
+        for (const emoji of emojis) {
+          const id = crypto.randomUUID();
+          this.db.run(
+            `INSERT INTO emojis (id, name, imageUrl, expiration)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(name)
+             DO UPDATE SET imageUrl = ?, expiration = ?`,
+            [
+              id,
+              emoji.name,
+              emoji.imageUrl,
+              expiration,
+              emoji.imageUrl,
+              expiration,
+            ],
+          );
+        }
+      })();
+
+      return true;
+    } catch (error) {
+      console.error("Error batch inserting emojis:", error);
+      return false;
+    }
+  }
+
+  /**
+   * Lists all emoji in the cache
+   * @returns Array of Emoji objects that haven't expired
+   */
+  async listEmoji(): Promise<Emoji[]> {
+    const results = this.db
+      .query("SELECT * FROM emojis WHERE expiration > ?")
+      .all(Date.now()) as Emoji[];
+
+    return results.map((result) => ({
+      type: "emoji",
+      id: result.id,
+      name: result.name,
+      imageUrl: result.imageUrl,
+      expiration: new Date(result.expiration),
+    }));
+  }
+
+  /**
    * Retrieves a user from the cache
    * @param userId Unique identifier of the user
    * @returns User object if found and not expired, null otherwise
