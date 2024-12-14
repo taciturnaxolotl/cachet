@@ -1,28 +1,11 @@
 import { Elysia, t } from "elysia";
 import { swagger } from "@elysiajs/swagger";
 import { version } from "../package.json";
-import { SlackApp } from "slack-edge";
 import { SlackCache } from "./cache";
+import { SlackWrapper } from "./slackWrapper";
+import type { SlackUser } from "./slack";
 
-if (!process.env.SLACK_BOT_TOKEN || !process.env.SLACK_SIGNING_SECRET) {
-  const missingEnvVars = [
-    !process.env.SLACK_BOT_TOKEN && "SLACK_BOT_TOKEN",
-    !process.env.SLACK_SIGNING_SECRET && "SLACK_SIGNING_SECRET",
-  ].filter(Boolean);
-
-  throw new Error(
-    `Missing required environment variables: ${missingEnvVars.join(", ")}`,
-  );
-}
-
-const slackApp = new SlackApp({
-  env: {
-    SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
-    SLACK_SIGNING_SECRET: process.env.SLACK_SIGNING_SECRET,
-    SLACK_LOGGING_LEVEL: "INFO",
-  },
-  startLazyListenerAfterAck: true,
-});
+const slackApp = new SlackWrapper();
 
 const cache = new SlackCache(process.env.DATABASE_PATH ?? "./data/cachet.db");
 
@@ -76,14 +59,14 @@ const app = new Elysia()
   .get(
     "/health",
     async ({ error }) => {
-      const slackConnection = await slackApp.client.auth.test();
+      const slackConnection = await slackApp.testAuth();
 
       const databaseConnection = await cache.healthCheck();
 
-      if (!slackConnection.ok || !databaseConnection)
+      if (!slackConnection || !databaseConnection)
         return error(500, {
           http: false,
-          slack: slackConnection.ok,
+          slack: slackConnection,
           database: databaseConnection,
         });
 
@@ -122,25 +105,25 @@ const app = new Elysia()
 
       // if not found then check slack first
       if (!user) {
-        const slackUser = await slackApp.client.users.info({
-          user: params.user,
-        });
+        let slackUser: SlackUser;
+        try {
+          slackUser = await slackApp.getUserInfo(params.user);
+        } catch (e) {
+          if (e instanceof Error && e.message === "user_not_found")
+            return error(404, { message: "User not found" });
 
-        if (!slackUser.ok) return error(404, { message: "User not found" });
+          return error(500, {
+            message: `Error fetching user from Slack: ${e}`,
+          });
+        }
 
-        if (!slackUser.user?.profile?.image_original || !slackUser.user.id)
-          return error(404, { message: "User data malformed" });
-
-        await cache.insertUser(
-          slackUser.user.id,
-          slackUser.user?.profile?.image_original,
-        );
+        await cache.insertUser(slackUser.id, slackUser.profile.image_original);
 
         return {
-          id: slackUser.user.id,
+          id: slackUser.id,
           expiration: new Date().toISOString(),
-          user: slackUser.user.id,
-          image: slackUser.user.profile.image_original,
+          user: slackUser.id,
+          image: slackUser.profile.image_original,
         };
       }
 
@@ -158,6 +141,9 @@ const app = new Elysia()
       }),
       response: {
         404: t.Object({
+          message: t.String(),
+        }),
+        500: t.Object({
           message: t.String(),
         }),
         200: t.Object({
