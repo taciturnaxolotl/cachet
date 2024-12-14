@@ -185,18 +185,25 @@ class Cache {
    */
   async getUser(userId: string): Promise<User | null> {
     const result = this.db
-      .query("SELECT * FROM users WHERE userId = ? AND expiration > ?")
-      .get(userId, Date.now()) as User;
+      .query("SELECT * FROM users WHERE userId = ?")
+      .get(userId) as User;
 
-    return result
-      ? {
-          type: "user",
-          id: result.id,
-          userId: result.userId,
-          imageUrl: result.imageUrl,
-          expiration: new Date(result.expiration),
-        }
-      : null;
+    if (!result) {
+      return null;
+    }
+
+    if (new Date(result.expiration).getTime() < Date.now()) {
+      this.db.run("DELETE FROM users WHERE userId = ?", [userId]);
+      return null;
+    }
+
+    return {
+      type: "user",
+      id: result.id,
+      userId: result.userId,
+      imageUrl: result.imageUrl,
+      expiration: new Date(result.expiration),
+    };
   }
 
   /**
