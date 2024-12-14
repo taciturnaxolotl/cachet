@@ -41,15 +41,22 @@ type CacheTypes = User | Emoji;
 class Cache {
   private db: Database;
   private defaultExpiration: number; // in hours
+  private onEmojiExpired?: () => void;
 
   /**
    * Creates a new Cache instance
    * @param dbPath Path to SQLite database file
    * @param defaultExpirationHours Default cache expiration in hours
+   * @param onEmojiExpired Optional callback function called when emojis expire
    */
-  constructor(dbPath: string, defaultExpirationHours = 24) {
+  constructor(
+    dbPath: string,
+    defaultExpirationHours = 24,
+    onEmojiExpired?: () => void,
+  ) {
     this.db = new Database(dbPath);
     this.defaultExpiration = defaultExpirationHours;
+    this.onEmojiExpired = onEmojiExpired;
 
     this.initDatabase();
     this.setupPurgeSchedule();
@@ -103,6 +110,13 @@ class Cache {
     const result2 = this.db.run("DELETE FROM emojis WHERE expiration < ?", [
       Date.now(),
     ]);
+
+    if (this.onEmojiExpired) {
+      if (result2.changes > 0) {
+        this.onEmojiExpired();
+      }
+    }
+
     return result.changes + result2.changes;
   }
 
@@ -113,6 +127,13 @@ class Cache {
   async purgeAll(): Promise<number> {
     const result = this.db.run("DELETE FROM users", [Date.now()]);
     const result2 = this.db.run("DELETE FROM emojis", [Date.now()]);
+
+    if (this.onEmojiExpired) {
+      if (result2.changes > 0) {
+        this.onEmojiExpired();
+      }
+    }
+
     return result.changes + result2.changes;
   }
 
