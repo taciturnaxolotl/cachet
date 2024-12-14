@@ -86,6 +86,16 @@ class Cache {
         expiration INTEGER
       )
     `);
+
+    // check if there are any emojis in the db
+    if (this.onEmojiExpired) {
+      const result = this.db
+        .query("SELECT COUNT(*) as count FROM emojis WHERE expiration > ?")
+        .get(Date.now()) as { count: number };
+      if (result.count === 0) {
+        this.onEmojiExpired();
+      }
+    }
   }
 
   /**

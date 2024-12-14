@@ -7,7 +7,19 @@ import type { SlackUser } from "./slack";
 
 const slackApp = new SlackWrapper();
 
-const cache = new SlackCache(process.env.DATABASE_PATH ?? "./data/cachet.db");
+const cache = new SlackCache(
+  process.env.DATABASE_PATH ?? "./data/cachet.db",
+  24,
+  async () => {
+    const emojis = await slackApp.getEmojiList();
+    const emojiEntries = Object.entries(emojis).map(([name, url]) => ({
+      name,
+      url,
+    }));
+
+    await cache.batchInsertEmojis(emojiEntries);
+  },
+);
 
 const app = new Elysia()
   .use(
