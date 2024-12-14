@@ -87,20 +87,33 @@ class Cache {
    */
   private setupPurgeSchedule() {
     // Run purge every hour
-    schedule("0 * * * *", () => {
-      this.purgeExpiredItems();
+    schedule("0 * * * *", async () => {
+      await this.purgeExpiredItems();
     });
   }
 
-  /**
-   * Removes expired items from the cache
-   * @private
+  /*
+   * Purges expired items from the cache
+   * @returns int indicating number of items purged
    */
-  private purgeExpiredItems() {
-    const now = Date.now();
+  async purgeExpiredItems(): Promise<number> {
+    const result = this.db.run("DELETE FROM users WHERE expiration < ?", [
+      Date.now(),
+    ]);
+    const result2 = this.db.run("DELETE FROM emojis WHERE expiration < ?", [
+      Date.now(),
+    ]);
+    return result.changes + result2.changes;
+  }
 
-    this.db.run("DELETE FROM users WHERE expiration < ?", [now]);
-    this.db.run("DELETE FROM emojis WHERE expiration < ?", [now]);
+  /*
+   * Purges all items from the cache
+   * @returns int indicating number of items purged
+   */
+  async purgeAll(): Promise<number> {
+    const result = this.db.run("DELETE FROM users", [Date.now()]);
+    const result2 = this.db.run("DELETE FROM emojis", [Date.now()]);
+    return result.changes + result2.changes;
   }
 
   /**
