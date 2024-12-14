@@ -120,7 +120,29 @@ const app = new Elysia()
     async ({ params, error }) => {
       const user = await cache.getUser(params.user);
 
-      if (!user) return error(404, { message: "User not found" });
+      // if not found then check slack first
+      if (!user) {
+        const slackUser = await slackApp.client.users.info({
+          user: params.user,
+        });
+
+        if (!slackUser.ok) return error(404, { message: "User not found" });
+
+        if (!slackUser.user?.profile?.image_original || !slackUser.user.id)
+          return error(404, { message: "User data malformed" });
+
+        await cache.insertUser(
+          slackUser.user.id,
+          slackUser.user?.profile?.image_original,
+        );
+
+        return {
+          id: slackUser.user.id,
+          expiration: new Date().toISOString(),
+          user: slackUser.user.id,
+          image: slackUser.user.profile.image_original,
+        };
+      }
 
       return {
         id: user.id,
