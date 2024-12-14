@@ -71,10 +71,6 @@ const app = new Elysia()
         },
         tags: [
           {
-            name: "Auth",
-            description: "Authentication routes",
-          },
-          {
             name: "The Cache!",
             description: "*must be read in an ominous voice*",
           },
