@@ -7,8 +7,6 @@ if (!process.env.SLACK_BOT_TOKEN || !process.env.SLACK_SIGNING_SECRET) {
   const missingEnvVars = [
     !process.env.SLACK_BOT_TOKEN && "SLACK_BOT_TOKEN",
     !process.env.SLACK_SIGNING_SECRET && "SLACK_SIGNING_SECRET",
-    !process.env.SLACK_USER_TOKEN && "SLACK_USER_TOKEN",
-    !process.env.ADMINS && "ADMINS",
   ].filter(Boolean);
 
   throw new Error(
