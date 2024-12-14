@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { swagger } from "@elysiajs/swagger";
 import { version } from "../package.json";
 import { SlackApp } from "slack-edge";
+import { SlackCache } from "./cache";
 
 if (!process.env.SLACK_BOT_TOKEN || !process.env.SLACK_SIGNING_SECRET) {
   const missingEnvVars = [
@@ -22,6 +23,8 @@ const slackApp = new SlackApp({
   },
   startLazyListenerAfterAck: true,
 });
+
+const cache = new SlackCache();
 
 const app = new Elysia()
   .use(
@@ -73,14 +76,15 @@ const app = new Elysia()
   .get(
     "/health",
     async ({ error }) => {
-      // TODO: Check slack connection and database connection
       const slackConnection = await slackApp.client.auth.test();
 
-      if (!slackConnection.ok)
+      const databaseConnection = await cache.healthCheck();
+
+      if (!slackConnection.ok || !databaseConnection)
         error(500, {
           http: false,
           slack: slackConnection.ok,
-          database: false,
+          database: databaseConnection,
         });
 
       return {

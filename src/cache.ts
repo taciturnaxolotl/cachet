@@ -104,6 +104,20 @@ class Cache {
   }
 
   /**
+   * Checks if the cache is healthy by testing database connectivity
+   * @returns boolean indicating if cache is healthy
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      this.db.query("SELECT 1").get();
+      return true;
+    } catch (error) {
+      console.error("Cache health check failed:", error);
+      return false;
+    }
+  }
+
+  /**
    * Inserts a user into the cache
    * @param userId Unique identifier for the user
    * @param imageUrl URL of the user's image
@@ -194,4 +208,4 @@ class Cache {
   }
 }
 
-export default Cache;
+export { Cache as SlackCache };
