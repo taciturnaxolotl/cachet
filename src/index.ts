@@ -81,7 +81,7 @@ const app = new Elysia()
       const databaseConnection = await cache.healthCheck();
 
       if (!slackConnection.ok || !databaseConnection)
-        error(500, {
+        return error(500, {
           http: false,
           slack: slackConnection.ok,
           database: databaseConnection,
@@ -111,6 +111,38 @@ const app = new Elysia()
           database: t.Boolean({
             default: false,
           }),
+        }),
+      },
+    },
+  )
+  .get(
+    "/users/:user",
+    async ({ params, error }) => {
+      const user = await cache.getUser(params.user);
+
+      if (!user) return error(404, { message: "User not found" });
+
+      return {
+        id: user.id,
+        expiration: user.expiration.toISOString(),
+        user: user.userId,
+        image: user.imageUrl,
+      };
+    },
+    {
+      tags: ["Users"],
+      params: t.Object({
+        user: t.String(),
+      }),
+      response: {
+        404: t.Object({
+          message: t.String(),
+        }),
+        200: t.Object({
+          id: t.String(),
+          expiration: t.String(),
+          user: t.String(),
+          image: t.String(),
         }),
       },
     },
