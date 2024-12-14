@@ -75,8 +75,8 @@ const app = new Elysia()
             description: "Authentication routes",
           },
           {
-            name: "Slack",
-            description: "Slack routes",
+            name: "The Cache!",
+            description: "*must be read in an ominous voice*",
           },
           {
             name: "Status",
