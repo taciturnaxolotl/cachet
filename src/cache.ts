@@ -31,6 +31,7 @@ interface User extends CacheItem {
 interface Emoji extends CacheItem {
   type: "emoji";
   name: string;
+  alias: string | null;
 }
 
 type CacheTypes = User | Emoji;
@@ -82,6 +83,7 @@ class Cache {
       CREATE TABLE IF NOT EXISTS emojis (
         id TEXT PRIMARY KEY,
         name TEXT UNIQUE,
+        alias TEXT,
         imageUrl TEXT,
         expiration INTEGER
       )
@@ -195,18 +197,23 @@ class Cache {
    * @param expirationHours Optional custom expiration time in hours
    * @returns boolean indicating success
    */
-  async insertEmoji(name: string, imageUrl: string, expirationHours?: number) {
+  async insertEmoji(
+    name: string,
+    alias: string | null,
+    imageUrl: string,
+    expirationHours?: number,
+  ) {
     const id = crypto.randomUUID();
     const expiration =
       Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
 
     try {
       this.db.run(
-        `INSERT INTO emojis (id, name, imageUrl, expiration)
-          VALUES (?, ?, ?, ?)
+        `INSERT INTO emojis (id, name, alias, imageUrl, expiration)
+          VALUES (?, ?, ?, ?, ?)
           ON CONFLICT(name)
           DO UPDATE SET imageUrl = ?, expiration = ?`,
-        [id, name, imageUrl, expiration, imageUrl, expiration],
+        [id, name, alias, imageUrl, expiration, imageUrl, expiration],
       );
       return true;
     } catch (error) {
@@ -222,7 +229,7 @@ class Cache {
    * @returns boolean indicating if all insertions were successful
    */
   async batchInsertEmoji(
-    emojis: Array<{ name: string; imageUrl: string }>,
+    emojis: Array<{ name: string; imageUrl: string; alias: string | null }>,
     expirationHours?: number,
   ): Promise<boolean> {
     try {
@@ -233,13 +240,14 @@ class Cache {
         for (const emoji of emojis) {
           const id = crypto.randomUUID();
           this.db.run(
-            `INSERT INTO emojis (id, name, imageUrl, expiration)
-             VALUES (?, ?, ?, ?)
+            `INSERT INTO emojis (id, name, alias, imageUrl, expiration)
+             VALUES (?, ?, ?, ?, ?)
              ON CONFLICT(name)
              DO UPDATE SET imageUrl = ?, expiration = ?`,
             [
               id,
               emoji.name,
+              emoji.alias,
               emoji.imageUrl,
               expiration,
               emoji.imageUrl,
@@ -269,6 +277,7 @@ class Cache {
       type: "emoji",
       id: result.id,
       name: result.name,
+      alias: result.alias || null,
       imageUrl: result.imageUrl,
       expiration: new Date(result.expiration),
     }));
@@ -317,6 +326,7 @@ class Cache {
           type: "emoji",
           id: result.id,
           name: result.name,
+          alias: result.alias || null,
           imageUrl: result.imageUrl,
           expiration: new Date(result.expiration),
         }

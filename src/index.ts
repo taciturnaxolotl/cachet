@@ -4,6 +4,7 @@ import { version } from "../package.json";
 import { SlackCache } from "./cache";
 import { SlackWrapper } from "./slackWrapper";
 import type { SlackUser } from "./slack";
+import { getEmojiUrl } from "../utils/emojiHelper";
 
 const slackApp = new SlackWrapper();
 
@@ -13,10 +14,35 @@ const cache = new SlackCache(
   async () => {
     console.log("Fetching emojis from Slack");
     const emojis = await slackApp.getEmojiList();
-    const emojiEntries = Object.entries(emojis).map(([name, url]) => ({
-      name,
-      imageUrl: url,
-    }));
+    const emojiEntries = Object.entries(emojis)
+      .map(([name, url]) => {
+        if (typeof url === "string" && url.startsWith("alias:")) {
+          const aliasName = url.substring(6); // Remove 'alias:' prefix
+          const aliasUrl = emojis[aliasName] ?? getEmojiUrl(aliasName) ?? null;
+
+          if (aliasUrl === null) {
+            console.warn(`Could not find alias for ${aliasName}`);
+            return;
+          }
+
+          return {
+            name,
+            imageUrl: aliasUrl === null ? getEmojiUrl(aliasName) : aliasUrl,
+            alias: aliasName,
+          };
+        }
+        return {
+          name,
+          imageUrl: url,
+          alias: null,
+        };
+      })
+      .filter(
+        (
+          entry,
+        ): entry is { name: string; imageUrl: string; alias: string | null } =>
+          entry !== undefined,
+      );
 
     console.log("Batch inserting emojis");
 
@@ -181,21 +207,12 @@ const app = new Elysia()
         id: emoji.id,
         expiration: emoji.expiration.toISOString(),
         name: emoji.name,
+        ...(emoji.alias ? { alias: emoji.alias } : {}),
         image: emoji.imageUrl,
       }));
     },
     {
       tags: ["Slack"],
-      response: {
-        200: t.Array(
-          t.Object({
-            id: t.String(),
-            expiration: t.String(),
-            name: t.String(),
-            image: t.String(),
-          }),
-        ),
-      },
     },
   )
   .get(
@@ -209,6 +226,7 @@ const app = new Elysia()
         id: emoji.id,
         expiration: emoji.expiration.toISOString(),
         name: emoji.name,
+        ...(emoji.alias ? { alias: emoji.alias } : {}),
         image: emoji.imageUrl,
       };
     },
