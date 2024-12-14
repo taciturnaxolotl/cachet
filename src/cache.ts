@@ -228,7 +228,7 @@ class Cache {
    * @param expirationHours Optional custom expiration time in hours for all emojis
    * @returns boolean indicating if all insertions were successful
    */
-  async batchInsertEmoji(
+  async batchInsertEmojis(
     emojis: Array<{ name: string; imageUrl: string; alias: string | null }>,
     expirationHours?: number,
   ): Promise<boolean> {
@@ -268,7 +268,7 @@ class Cache {
    * Lists all emoji in the cache
    * @returns Array of Emoji objects that haven't expired
    */
-  async listEmoji(): Promise<Emoji[]> {
+  async listEmojis(): Promise<Emoji[]> {
     const results = this.db
       .query("SELECT * FROM emojis WHERE expiration > ?")
       .all(Date.now()) as Emoji[];

@@ -46,7 +46,7 @@ const cache = new SlackCache(
 
     console.log("Batch inserting emojis");
 
-    await cache.batchInsertEmoji(emojiEntries);
+    await cache.batchInsertEmojis(emojiEntries);
 
     console.log("Finished batch inserting emojis");
   },
@@ -201,7 +201,7 @@ const app = new Elysia()
   .get(
     "/emojis",
     async () => {
-      const emojis = await cache.listEmoji();
+      const emojis = await cache.listEmojis();
 
       return emojis.map((emoji) => ({
         id: emoji.id,
