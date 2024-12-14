@@ -165,12 +165,15 @@ class Cache {
 
     try {
       this.db.run(
-        "INSERT INTO users (id, userId, imageUrl, expiration) VALUES (?, ?, ?, ?)",
-        [id, userId, imageUrl, expiration],
+        `INSERT INTO users (id, userId, imageUrl, expiration)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(userId)
+           DO UPDATE SET imageUrl = ?, expiration = ?`,
+        [id, userId, imageUrl, expiration, imageUrl, expiration],
       );
       return true;
     } catch (error) {
-      console.error("Error inserting user:", error);
+      console.error("Error inserting/updating user:", error);
       return false;
     }
   }
@@ -189,12 +192,15 @@ class Cache {
 
     try {
       this.db.run(
-        "INSERT INTO emojis (id, name, imageUrl, expiration) VALUES (?, ?, ?, ?)",
-        [id, name, imageUrl, expiration],
+        `INSERT INTO emojis (id, name, imageUrl, expiration)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(name)
+          DO UPDATE SET imageUrl = ?, expiration = ?`,
+        [id, name, imageUrl, expiration, imageUrl, expiration],
       );
       return true;
     } catch (error) {
-      console.error("Error inserting emoji:", error);
+      console.error("Error inserting/updating emoji:", error);
       return false;
     }
   }
