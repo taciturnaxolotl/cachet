@@ -147,6 +147,38 @@ const app = new Elysia()
       },
     },
   )
+  .get(
+    "/emojis/:emoji",
+    async ({ params, error }) => {
+      const emoji = await cache.getEmoji(params.emoji);
+
+      if (!emoji) return error(404, { message: "Emoji not found" });
+
+      return {
+        id: emoji.id,
+        expiration: emoji.expiration.toISOString(),
+        name: emoji.name,
+        image: emoji.imageUrl,
+      };
+    },
+    {
+      tags: ["Slack"],
+      params: t.Object({
+        emoji: t.String(),
+      }),
+      response: {
+        404: t.Object({
+          message: t.String(),
+        }),
+        200: t.Object({
+          id: t.String(),
+          expiration: t.String(),
+          name: t.String(),
+          image: t.String(),
+        }),
+      },
+    },
+  )
   .listen(process.env.PORT ?? 3000);
 
 console.log(
