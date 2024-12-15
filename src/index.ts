@@ -59,7 +59,8 @@ const app = new Elysia()
         info: {
           version: version,
           title: "Cachet",
-          description: "Cachet API Documentation",
+          description:
+            "Hi 👋\n\nThis is a pretty simple API that acts as a middleman caching layer between slack and the outside world. There may be authentication in the future, but for now, it's just a simple cache.\n\nThe `/r` endpoints are redirects to the actual image URLs, so you can use them as direct image links.",
           contact: {
             name: "Kieran Klukas",
             email: "me@dunkirk.sh",
@@ -76,7 +77,7 @@ const app = new Elysia()
           },
           {
             name: "Status",
-            description: "Status routes",
+            description: "*Rather boring status endpoints :(*",
           },
         ],
       },
