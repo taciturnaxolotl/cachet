@@ -40,11 +40,12 @@ I included a service file in this repo that you can use to run the app. Just cop
 
 ```bash
 cp cachet.service ~/.config/systemd/user/
+mkdir data
 systemctl --user enable cachet
 systemctl --user start cachet
 ```
 
-Now grab a free port from nest (`nest get_port`) and then link your domain to your nest user (`nest caddy add cachet.dunkirk.sh`) (don't for get to make a CNAME on the domain pointing to `kierank.hackclub.app`) and then after editing in a `Caddyfile` entry like the following you should be good to go!
+Now grab a free port from nest (`nest get_port`) and then link your domain to your nest user (`nest caddy add cachet.dunkirk.sh`) (don't for get to make a CNAME on the domain pointing to `kierank.hackclub.app`) and then after editing in a `Caddyfile` entry like the following you should be good to go! (Don't forget to restart caddy: `systemctl restart --user caddy`)
 
 ```caddy
 http://cachet.dunkirk.sh {
