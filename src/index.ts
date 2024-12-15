@@ -12,6 +12,7 @@ import * as Sentry from "@sentry/bun";
 if (process.env.SENTRY_DSN) {
   console.log("Sentry DSN provided, error monitoring is enabled");
   Sentry.init({
+    environment: process.env.NODE_ENV,
     dsn: process.env.SENTRY_DSN, // Replace with your Sentry DSN
     tracesSampleRate: 1.0, // Adjust this value for performance monitoring
   });
