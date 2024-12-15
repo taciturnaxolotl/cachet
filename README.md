@@ -68,6 +68,8 @@ The api is pretty simple. You can get a profile picture by calling `GET /profile
 
 There are also complete swagger docs available at `/swagger`! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^_^)
 
+![Swagger Docs](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/swagger.webp)
+
 ## How does it work?
 
 The app is honestly super simple. It's pretty much just a cache layer on top of the slack api. When you request a profile picture or emoji it first checks the cache. If the image is in the cache it returns the link to the image. If the image is not in the cache it calls the slack api to get the link to image and then stores that in the cache before returning the image link to you!
