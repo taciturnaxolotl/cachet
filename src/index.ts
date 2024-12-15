@@ -83,19 +83,19 @@ const app = new Elysia()
       },
     }),
   )
-  .get(
-    "/",
-    () => "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\n---",
-    {
-      tags: ["Status"],
-      response: {
-        200: t.String({
-          default:
-            "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\n---",
-        }),
-      },
-    },
-  )
+  .get("/", ({ redirect, headers }) => {
+    // check if its a browser
+
+    if (
+      headers["user-agent"]?.toLowerCase().includes("mozilla") ||
+      headers["user-agent"]?.toLowerCase().includes("chrome") ||
+      headers["user-agent"]?.toLowerCase().includes("safari")
+    ) {
+      return redirect("/swagger", 302);
+    }
+
+    return "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\n---";
+  })
   .get(
     "/health",
     async ({ error }) => {
