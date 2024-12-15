@@ -118,8 +118,6 @@ const user = await slack.getUser("U062UG485EE");
 const emojis = await slack.getEmoji();
 ```
 
-#
-
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break.svg" />
 </p>
