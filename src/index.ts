@@ -103,7 +103,10 @@ const app = new Elysia()
     }),
   )
   .onError(({ code, error }) => {
-    console.error(error);
+    if (error instanceof Error)
+      console.error(
+        `\x1b[31m x\x1b[0m unhandled error: \x1b[31m${error.message}\x1b[0m`,
+      );
     Sentry.captureException(error);
     if (code === "VALIDATION") {
       return error.message;
