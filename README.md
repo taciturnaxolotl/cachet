@@ -38,6 +38,7 @@ Your `.env` file should look like this:
 ```bash
 SLACK_TOKEN=xoxb-123456789012-123456789012-123456789012-123456789012
 SLACK_SIGNING_SECRET=12345678901234567890123456789012
+SENTRY_DSN="https://xxxxx@xxxx.ingest.us.sentry.io/123456" # Optional
 DATABASE_PATH=/path/to/db.sqlite # Optional
 PORT=3000 # Optional
 ```

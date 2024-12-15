@@ -7,6 +7,17 @@ import { SlackCache } from "./cache";
 import { SlackWrapper } from "./slackWrapper";
 import type { SlackUser } from "./slack";
 import { getEmojiUrl } from "../utils/emojiHelper";
+import * as Sentry from "@sentry/bun";
+
+if (process.env.SENTRY_DSN) {
+  console.log("Sentry DSN provided, error monitoring is enabled");
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN, // Replace with your Sentry DSN
+    tracesSampleRate: 1.0, // Adjust this value for performance monitoring
+  });
+} else {
+  console.warn("Sentry DSN not provided, error monitoring is disabled");
+}
 
 const slackApp = new SlackWrapper();
 
