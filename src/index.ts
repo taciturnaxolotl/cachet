@@ -102,6 +102,13 @@ const app = new Elysia()
       },
     }),
   )
+  .onError(({ code, error }) => {
+    console.error(error);
+    Sentry.captureException(error);
+    if (code === "VALIDATION") {
+      return error.message;
+    }
+  })
   .get("/", ({ redirect, headers }) => {
     // check if its a browser
 
@@ -170,6 +177,13 @@ const app = new Elysia()
         } catch (e) {
           if (e instanceof Error && e.message === "user_not_found")
             return error(404, { message: "User not found" });
+
+          Sentry.captureException(e);
+
+          if (e instanceof Error)
+            console.warn(
+              `\x1b[38;5;214m ⚠️ WARN\x1b[0m error on fetching user from slack: \x1b[38;5;208m${e.message}\x1b[0m`,
+            );
 
           return error(500, {
             message: `Error fetching user from Slack: ${e}`,
@@ -240,6 +254,13 @@ const app = new Elysia()
         } catch (e) {
           if (e instanceof Error && e.message === "user_not_found")
             return error(404, { message: "User not found" });
+
+          Sentry.captureException(e);
+
+          if (e instanceof Error)
+            console.warn(
+              `\x1b[38;5;214m ⚠️ WARN\x1b[0m error on fetching user from slack: \x1b[38;5;208m${e.message}\x1b[0m`,
+            );
 
           return error(500, {
             message: `Error fetching user from Slack: ${e}`,
