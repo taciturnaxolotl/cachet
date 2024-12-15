@@ -6,6 +6,7 @@
     "dev": "bun run --watch src/index.ts"
   },
   "dependencies": {
+    "@elysiajs/cors": "^1.1.1",
     "@elysiajs/swagger": "^1.1.6",
     "@tqman/nice-logger": "^1.0.7",
     "@types/node-cron": "^3.0.11",

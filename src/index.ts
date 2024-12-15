@@ -1,6 +1,7 @@
 import { Elysia, t } from "elysia";
 import { logger } from "@tqman/nice-logger";
 import { swagger } from "@elysiajs/swagger";
+import { cors } from "@elysiajs/cors";
 import { version } from "../package.json";
 import { SlackCache } from "./cache";
 import { SlackWrapper } from "./slackWrapper";
@@ -59,6 +60,7 @@ const app = new Elysia()
       mode: "combined",
     }),
   )
+  .use(cors())
   .use(
     swagger({
       documentation: {
