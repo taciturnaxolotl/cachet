@@ -13,13 +13,13 @@
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
 </p>
 
-#
-
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/out.gif" />
 </p>
 
-#
+<p align="center">
+	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
+</p>
 
 ## What's this?
 
