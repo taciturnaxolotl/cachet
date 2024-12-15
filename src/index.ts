@@ -1,4 +1,5 @@
 import { Elysia, t } from "elysia";
+import { logger } from "@tqman/nice-logger";
 import { swagger } from "@elysiajs/swagger";
 import { version } from "../package.json";
 import { SlackCache } from "./cache";
@@ -53,6 +54,11 @@ const cache = new SlackCache(
 );
 
 const app = new Elysia()
+  .use(
+    logger({
+      mode: "combined",
+    }),
+  )
   .use(
     swagger({
       documentation: {
@@ -348,5 +354,5 @@ const app = new Elysia()
   .listen(process.env.PORT ?? 3000);
 
 console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port} at ${version}`,
+  `\n---\n\n🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port} at v${version}\n\n---\n`,
 );

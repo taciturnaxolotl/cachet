@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@elysiajs/swagger": "^1.1.6",
+    "@tqman/nice-logger": "^1.0.7",
     "@types/node-cron": "^3.0.11",
     "elysia": "latest",
     "node-cron": "^3.0.3"
