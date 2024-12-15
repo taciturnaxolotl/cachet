@@ -208,6 +208,42 @@ const app = new Elysia()
     },
   )
   .get(
+    "/users/:user/r",
+    async ({ params, error, redirect }) => {
+      const user = await cache.getUser(params.user);
+
+      // if not found then check slack first
+      if (!user) {
+        let slackUser: SlackUser;
+        try {
+          slackUser = await slackApp.getUserInfo(params.user);
+        } catch (e) {
+          if (e instanceof Error && e.message === "user_not_found")
+            return error(404, { message: "User not found" });
+
+          return error(500, {
+            message: `Error fetching user from Slack: ${e}`,
+          });
+        }
+
+        await cache.insertUser(slackUser.id, slackUser.profile.image_original);
+
+        return redirect(slackUser.profile.image_original, 302);
+      }
+
+      return redirect(user.imageUrl, 302);
+    },
+    {
+      tags: ["Slack"],
+      query: t.Object({
+        r: t.Optional(t.String()),
+      }),
+      params: t.Object({
+        user: t.String(),
+      }),
+    },
+  )
+  .get(
     "/emojis",
     async () => {
       const emojis = await cache.listEmojis();
@@ -290,6 +326,22 @@ const app = new Elysia()
           }),
         }),
       },
+    },
+  )
+  .get(
+    "/emojis/:emoji/r",
+    async ({ params, error, redirect }) => {
+      const emoji = await cache.getEmoji(params.emoji);
+
+      if (!emoji) return error(404, { message: "Emoji not found" });
+
+      return redirect(emoji.imageUrl, 302);
+    },
+    {
+      tags: ["Slack"],
+      params: t.Object({
+        emoji: t.String(),
+      }),
     },
   )
   .listen(process.env.PORT ?? 3000);
