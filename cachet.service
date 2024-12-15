@@ -1,0 +1,15 @@
+[Unit]
+Description=cache for slack profile pictures and emojis
+DefaultDependencies=no
+After=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=/home/kierank/cachet
+ExecStart=bun run src/index.ts
+TimeoutStartSec=0
+Restart=on-failure
+RestartSec=1s
+
+[Install]
+WantedBy=default.target

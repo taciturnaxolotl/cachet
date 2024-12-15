@@ -36,6 +36,23 @@ PORT=3000 # Optional
 
 The slack app can be created from the [`manifest.yaml`](./manifest.yaml) in this repo. It just needs the `emoji:read` and `users:read` scopes.
 
+I included a service file in this repo that you can use to run the app. Just copy it to `~/.config/systemd/` and then run `systemctl --user enable cachet` and `systemctl --user start cachet` to start the app.
+
+```bash
+cp cachet.service ~/.config/systemd/user/
+systemctl --user enable cachet
+systemctl --user start cachet
+```
+
+Now grab a free port from nest (`nest get_port`) and then link your domain to your nest user (`nest caddy add cachet.dunkirk.sh`) (don't for get to make a CNAME on the domain pointing to `kierank.hackclub.app`) and then after editing in a `Caddyfile` entry like the following you should be good to go!
+
+```caddy
+http://cachet.dunkirk.sh {
+        bind unix/.cachet.dunkirk.sh.webserver.sock|777
+        reverse_proxy :38453
+}
+```
+
 ### Usage
 
 The api is pretty simple. You can get a profile picture by calling `GET /profile/:id` where `:id` is the slack user id. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`. (WIP - subject to rapid change)
