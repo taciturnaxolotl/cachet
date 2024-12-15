@@ -66,7 +66,7 @@ http://cachet.dunkirk.sh {
 
 The api is pretty simple. You can get a profile picture by calling `GET /profile/:id` where `:id` is the slack user id. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`. (WIP - subject to rapid change)
 
-There are also complete swagger docs available at `/swagger`! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^_^)
+There are also complete swagger docs available at [`/swagger`](https://cachet.dunkirk.sh/swagger)! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^_^)
 
 ![Swagger Docs](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/swagger.webp)
 
