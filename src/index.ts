@@ -174,7 +174,7 @@ const app = new Elysia()
       };
     },
     {
-      tags: ["Slack"],
+      tags: ["The Cache!"],
       params: t.Object({
         user: t.String(),
       }),
@@ -234,7 +234,7 @@ const app = new Elysia()
       return redirect(user.imageUrl, 302);
     },
     {
-      tags: ["Slack"],
+      tags: ["The Cache!"],
       query: t.Object({
         r: t.Optional(t.String()),
       }),
@@ -257,7 +257,7 @@ const app = new Elysia()
       }));
     },
     {
-      tags: ["Slack"],
+      tags: ["The Cache!"],
       response: {
         200: t.Array(
           t.Object({
@@ -300,7 +300,7 @@ const app = new Elysia()
       };
     },
     {
-      tags: ["Slack"],
+      tags: ["The Cache!"],
       params: t.Object({
         emoji: t.String(),
       }),
@@ -338,7 +338,7 @@ const app = new Elysia()
       return redirect(emoji.imageUrl, 302);
     },
     {
-      tags: ["Slack"],
+      tags: ["The Cache!"],
       params: t.Object({
         emoji: t.String(),
       }),
