@@ -11,6 +11,7 @@
     "@sentry/bun": "^8.45.0",
     "@tqman/nice-logger": "^1.0.7",
     "@types/node-cron": "^3.0.11",
+    "bottleneck": "^2.19.5",
     "elysia": "latest",
     "node-cron": "^3.0.3"
   },

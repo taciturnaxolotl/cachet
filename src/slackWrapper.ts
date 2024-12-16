@@ -5,6 +5,8 @@ import type {
   SlackUserInfoResponse,
 } from "./slack";
 
+import Bottleneck from "bottleneck";
+
 /**
  * Interface for mapping emoji names to their URLs
  */
@@ -28,6 +30,10 @@ interface SlackConfig {
 class SlackWrapper {
   private signingSecret: string;
   private botToken: string;
+  private limiter = new Bottleneck({
+    maxConcurrent: 10,
+    minTime: 10, // 100 requests per second
+  });
 
   /**
    * Creates a new SlackWrapper instance
