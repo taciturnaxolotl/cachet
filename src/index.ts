@@ -264,8 +264,16 @@ const app = new Elysia()
         try {
           slackUser = await slackApp.getUserInfo(params.user);
         } catch (e) {
-          if (e instanceof Error && e.message === "user_not_found")
-            return error(404, { message: "User not found" });
+          if (e instanceof Error && e.message === "user_not_found") {
+            console.warn(
+              `\x1b[38;5;214m ⚠️ WARN\x1b[0m user not found: \x1b[38;5;208m${params.user}\x1b[0m`,
+            );
+
+            return redirect(
+              "https://api.dicebear.com/9.x/thumbs/svg?seed={username_hash}",
+              307,
+            );
+          }
 
           Sentry.withScope((scope) => {
             scope.setExtra("url", request.url);
