@@ -174,7 +174,7 @@ const app = new Elysia()
       const user = await cache.getUser(params.user);
 
       // if not found then check slack first
-      if (!user) {
+      if (!user || !user.imageUrl) {
         let slackUser: SlackUser;
         try {
           slackUser = await slackApp.getUserInfo(params.user);
@@ -194,13 +194,13 @@ const app = new Elysia()
           });
         }
 
-        await cache.insertUser(slackUser.id, slackUser.profile.image_original);
+        await cache.insertUser(slackUser.id, slackUser.profile.image_512);
 
         return {
           id: slackUser.id,
           expiration: new Date().toISOString(),
           user: slackUser.id,
-          image: slackUser.profile.image_original,
+          image: slackUser.profile.image_512,
         };
       }
 
@@ -251,7 +251,7 @@ const app = new Elysia()
       const user = await cache.getUser(params.user);
 
       // if not found then check slack first
-      if (!user) {
+      if (!user || !user.imageUrl) {
         let slackUser: SlackUser;
         try {
           slackUser = await slackApp.getUserInfo(params.user);
@@ -271,9 +271,9 @@ const app = new Elysia()
           });
         }
 
-        await cache.insertUser(slackUser.id, slackUser.profile.image_original);
+        await cache.insertUser(slackUser.id, slackUser.profile.image_512);
 
-        return redirect(slackUser.profile.image_original, 302);
+        return redirect(slackUser.profile.image_512, 302);
       }
 
       return redirect(user.imageUrl, 302);
