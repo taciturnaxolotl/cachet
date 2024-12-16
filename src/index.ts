@@ -392,5 +392,5 @@ const app = new Elysia()
   .listen(process.env.PORT ?? 3000);
 
 console.log(
-  `\n---\n\n🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port} at v${version}\n\n---\n`,
+  `\n---\n\n🦊 Elysia is running at http://${app.server?.hostname}:${app.server?.port} on v${version}@${process.env.NODE_ENV}\n\n---\n`,
 );
