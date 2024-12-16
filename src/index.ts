@@ -103,12 +103,16 @@ const app = new Elysia()
       },
     }),
   )
-  .onError(({ code, error }) => {
+  .onError(({ code, error, request }) => {
     if (error instanceof Error)
       console.error(
         `\x1b[31m x\x1b[0m unhandled error: \x1b[31m${error.message}\x1b[0m`,
       );
-    Sentry.captureException(error);
+    Sentry.withScope((scope) => {
+      scope.setExtra("url", request.url);
+      scope.setExtra("code", code);
+      Sentry.captureException(error);
+    });
     if (code === "VALIDATION") {
       return error.message;
     }
@@ -170,7 +174,7 @@ const app = new Elysia()
   )
   .get(
     "/users/:user",
-    async ({ params, error }) => {
+    async ({ params, error, request }) => {
       const user = await cache.getUser(params.user);
 
       // if not found then check slack first
@@ -182,7 +186,11 @@ const app = new Elysia()
           if (e instanceof Error && e.message === "user_not_found")
             return error(404, { message: "User not found" });
 
-          Sentry.captureException(e);
+          Sentry.withScope((scope) => {
+            scope.setExtra("url", request.url);
+            scope.setExtra("user", params.user);
+            Sentry.captureException(e);
+          });
 
           if (e instanceof Error)
             console.warn(
@@ -247,7 +255,7 @@ const app = new Elysia()
   )
   .get(
     "/users/:user/r",
-    async ({ params, error, redirect }) => {
+    async ({ params, error, redirect, request }) => {
       const user = await cache.getUser(params.user);
 
       // if not found then check slack first
@@ -259,7 +267,11 @@ const app = new Elysia()
           if (e instanceof Error && e.message === "user_not_found")
             return error(404, { message: "User not found" });
 
-          Sentry.captureException(e);
+          Sentry.withScope((scope) => {
+            scope.setExtra("url", request.url);
+            scope.setExtra("user", params.user);
+            Sentry.captureException(e);
+          });
 
           if (e instanceof Error)
             console.warn(
