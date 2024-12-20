@@ -22,6 +22,7 @@ interface CacheItem {
  */
 interface User extends CacheItem {
   type: "user";
+  displayName: string;
   userId: string;
 }
 
@@ -73,6 +74,7 @@ class Cache {
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         userId TEXT UNIQUE,
+        displayName TEXT,
         imageUrl TEXT,
         expiration INTEGER
       )
@@ -170,18 +172,23 @@ class Cache {
    * @param expirationHours Optional custom expiration time in hours
    * @returns boolean indicating success
    */
-  async insertUser(userId: string, imageUrl: string, expirationHours?: number) {
+  async insertUser(
+    userId: string,
+    displayName: string,
+    imageUrl: string,
+    expirationHours?: number,
+  ) {
     const id = crypto.randomUUID();
     const expiration =
       Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
 
     try {
       this.db.run(
-        `INSERT INTO users (id, userId, imageUrl, expiration)
-           VALUES (?, ?, ?, ?)
+        `INSERT INTO users (id, userId, displayName, imageUrl, expiration)
+           VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(userId)
            DO UPDATE SET imageUrl = ?, expiration = ?`,
-        [id, userId, imageUrl, expiration, imageUrl, expiration],
+        [id, userId, displayName, imageUrl, expiration, imageUrl, expiration],
       );
       return true;
     } catch (error) {
@@ -306,6 +313,7 @@ class Cache {
       type: "user",
       id: result.id,
       userId: result.userId,
+      displayName: result.displayName,
       imageUrl: result.imageUrl,
       expiration: new Date(result.expiration),
     };
