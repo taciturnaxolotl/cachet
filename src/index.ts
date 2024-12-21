@@ -300,7 +300,11 @@ const app = new Elysia()
           });
         }
 
-        await cache.insertUser(slackUser.id, slackUser.profile.image_512);
+        await cache.insertUser(
+          slackUser.id,
+          slackUser.profile.display_name_normalized,
+          slackUser.profile.image_512,
+        );
 
         return redirect(slackUser.profile.image_512, 302);
       }
