@@ -75,6 +75,7 @@ const app = new Elysia()
   .use(cors())
   .use(
     swagger({
+      exclude: ["/", "favicon.ico"],
       documentation: {
         info: {
           version: version,
@@ -130,6 +131,7 @@ const app = new Elysia()
 
     return "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\n---";
   })
+  .get("/favicon.ico", Bun.file("./favicon.ico"))
   .get(
     "/health",
     async ({ error }) => {
