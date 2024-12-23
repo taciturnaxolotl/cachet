@@ -138,9 +138,13 @@ class Cache {
    * Purges all items from the cache
    * @returns int indicating number of items purged
    */
-  async purgeAll(): Promise<number> {
-    const result = this.db.run("DELETE FROM users", [Date.now()]);
-    const result2 = this.db.run("DELETE FROM emojis", [Date.now()]);
+  async purgeAll(): Promise<{
+    message: string;
+    users: number;
+    emojis: number;
+  }> {
+    const result = this.db.run("DELETE FROM users");
+    const result2 = this.db.run("DELETE FROM emojis");
 
     if (this.onEmojiExpired) {
       if (result2.changes > 0) {
@@ -148,7 +152,11 @@ class Cache {
       }
     }
 
-    return result.changes + result2.changes;
+    return {
+      message: "Cache purged",
+      users: result.changes,
+      emojis: result2.changes,
+    };
   }
 
   /**

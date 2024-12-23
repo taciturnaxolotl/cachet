@@ -422,6 +422,33 @@ const app = new Elysia()
       }),
     },
   )
+  .post(
+    "/reset",
+    async ({ headers, set }) => {
+      if (headers.authorization !== `Bearer ${process.env.BEARER_TOKEN}`) {
+        set.status = 401;
+        return "Unauthorized";
+      }
+
+      return await cache.purgeAll();
+    },
+    {
+      tags: ["The Cache!"],
+      headers: t.Object({
+        authorization: t.String({
+          default: "Bearer <token>",
+        }),
+      }),
+      response: {
+        200: t.Object({
+          message: t.String(),
+          users: t.Number(),
+          emojis: t.Number(),
+        }),
+        401: t.String({ default: "Unauthorized" }),
+      },
+    },
+  )
   .listen(process.env.PORT ?? 3000);
 
 console.log(
