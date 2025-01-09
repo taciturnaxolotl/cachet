@@ -204,9 +204,13 @@ const app = new Elysia()
           });
         }
 
+        const displayName =
+          slackUser.profile.display_name_normalized ||
+          slackUser.profile.real_name_normalized;
+
         await cache.insertUser(
           slackUser.id,
-          slackUser.profile.display_name_normalized,
+          displayName,
           slackUser.profile.image_512,
         );
 
@@ -214,7 +218,7 @@ const app = new Elysia()
           id: slackUser.id,
           expiration: new Date().toISOString(),
           user: slackUser.id,
-          displayName: slackUser.profile.display_name_normalized,
+          displayName: displayName,
           image: slackUser.profile.image_512,
         };
       }
@@ -304,7 +308,8 @@ const app = new Elysia()
 
         await cache.insertUser(
           slackUser.id,
-          slackUser.profile.display_name_normalized,
+          slackUser.profile.display_name_normalized ||
+            slackUser.profile.real_name_normalized,
           slackUser.profile.image_512,
         );
 
