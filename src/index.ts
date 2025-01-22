@@ -72,7 +72,11 @@ const app = new Elysia()
       mode: "combined",
     }),
   )
-  .use(cors())
+  .use(
+    cors({
+      origin: true,
+    }),
+  )
   .use(
     swagger({
       exclude: ["/", "favicon.ico"],
