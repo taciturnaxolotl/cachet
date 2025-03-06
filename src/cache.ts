@@ -108,7 +108,7 @@ class Cache {
    */
   private setupPurgeSchedule() {
     // Run purge every hour
-    schedule("0 * * * *", async () => {
+    schedule("45 * * * *", async () => {
       await this.purgeExpiredItems();
     });
   }

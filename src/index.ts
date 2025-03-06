@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { logger } from "@tqman/nice-logger";
 import { swagger } from "@elysiajs/swagger";
 import { cors } from "@elysiajs/cors";
+import { cron } from "@elysiajs/cron";
 import { version } from "../package.json";
 import { SlackCache } from "./cache";
 import { SlackWrapper } from "./slackWrapper";
@@ -24,7 +25,7 @@ const slackApp = new SlackWrapper();
 
 const cache = new SlackCache(
   process.env.DATABASE_PATH ?? "./data/cachet.db",
-  24,
+  25,
   async () => {
     console.log("Fetching emojis from Slack");
     const emojis = await slackApp.getEmojiList();
@@ -75,6 +76,15 @@ const app = new Elysia()
   .use(
     cors({
       origin: true,
+    }),
+  )
+  .use(
+    cron({
+      name: "heartbeat",
+      pattern: "0 0 * * *",
+      async run() {
+        await cache.purgeAll();
+      },
     }),
   )
   .use(

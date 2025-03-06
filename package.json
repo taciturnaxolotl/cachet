@@ -7,6 +7,7 @@
   },
   "dependencies": {
     "@elysiajs/cors": "^1.1.1",
+    "@elysiajs/cron": "^1.2.0",
     "@elysiajs/swagger": "^1.1.6",
     "@sentry/bun": "^8.45.0",
     "@tqman/nice-logger": "^1.0.7",
