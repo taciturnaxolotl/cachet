@@ -191,7 +191,7 @@ const app = new Elysia()
   .get(
     "/users/:user",
     async ({ params, error, request }) => {
-      const user = await cache.getUser(params.user);
+      const user = await cache.getUser(params.user.toLowerCase());
 
       // if not found then check slack first
       if (!user || !user.imageUrl) {
@@ -291,7 +291,7 @@ const app = new Elysia()
       if (!user || !user.imageUrl) {
         let slackUser: SlackUser;
         try {
-          slackUser = await slackApp.getUserInfo(params.user);
+          slackUser = await slackApp.getUserInfo(params.user.toUpperCase());
         } catch (e) {
           if (e instanceof Error && e.message === "user_not_found") {
             console.warn(
@@ -386,7 +386,7 @@ const app = new Elysia()
   .get(
     "/emojis/:emoji",
     async ({ params, error }) => {
-      const emoji = await cache.getEmoji(params.emoji);
+      const emoji = await cache.getEmoji(params.emoji.toLowerCase());
 
       if (!emoji) return error(404, { message: "Emoji not found" });
 
@@ -430,7 +430,7 @@ const app = new Elysia()
   .get(
     "/emojis/:emoji/r",
     async ({ params, error, redirect }) => {
-      const emoji = await cache.getEmoji(params.emoji);
+      const emoji = await cache.getEmoji(params.emoji.toLowerCase());
 
       if (!emoji) return error(404, { message: "Emoji not found" });
 
