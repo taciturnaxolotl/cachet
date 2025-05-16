@@ -225,6 +225,7 @@ const app = new Elysia()
         await cache.insertUser(
           slackUser.id,
           displayName,
+          slackUser.profile.pronouns,
           slackUser.profile.image_512,
         );
 
@@ -233,6 +234,7 @@ const app = new Elysia()
           expiration: new Date().toISOString(),
           user: slackUser.id,
           displayName: displayName,
+          pronouns: slackUser.profile.pronouns,
           image: slackUser.profile.image_512,
         };
       }
@@ -242,6 +244,7 @@ const app = new Elysia()
         expiration: user.expiration.toISOString(),
         user: user.userId,
         displayName: user.displayName,
+        pronouns: user.pronouns,
         image: user.imageUrl,
       };
     },
@@ -274,6 +277,7 @@ const app = new Elysia()
           displayName: t.String({
             default: "krn",
           }),
+          pronouns: t.String({ default: "possibly blank" }),
           image: t.String({
             default:
               "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
@@ -324,6 +328,7 @@ const app = new Elysia()
           slackUser.id,
           slackUser.profile.display_name_normalized ||
             slackUser.profile.real_name_normalized,
+          slackUser.profile.pronouns,
           slackUser.profile.image_512,
         );
 

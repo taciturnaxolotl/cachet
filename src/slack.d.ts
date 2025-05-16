@@ -86,6 +86,8 @@ export interface SlackUserProfile {
   display_name_normalized: string;
   /** User's email address */
   email: string;
+  /** User's pronouns */
+  pronouns: string;
   /** Original size profile image URL */
   image_original: string;
   /** 24x24 profile image URL */

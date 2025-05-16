@@ -23,6 +23,7 @@ interface CacheItem {
 interface User extends CacheItem {
   type: "user";
   displayName: string;
+  pronouns: string;
   userId: string;
 }
 
@@ -75,6 +76,7 @@ class Cache {
         id TEXT PRIMARY KEY,
         userId TEXT UNIQUE,
         displayName TEXT,
+        pronouns TEXT,
         imageUrl TEXT,
         expiration INTEGER
       )
@@ -183,6 +185,7 @@ class Cache {
   async insertUser(
     userId: string,
     displayName: string,
+    pronouns: string,
     imageUrl: string,
     expirationHours?: number,
   ) {
@@ -192,11 +195,20 @@ class Cache {
 
     try {
       this.db.run(
-        `INSERT INTO users (id, userId, displayName, imageUrl, expiration)
-           VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO users (id, userId, displayName, pronouns, imageUrl, expiration)
+           VALUES (?, ?, ?, ?, ?, ?)
            ON CONFLICT(userId)
            DO UPDATE SET imageUrl = ?, expiration = ?`,
-        [id, userId, displayName, imageUrl, expiration, imageUrl, expiration],
+        [
+          id,
+          userId,
+          displayName,
+          pronouns,
+          imageUrl,
+          expiration,
+          imageUrl,
+          expiration,
+        ],
       );
       return true;
     } catch (error) {
@@ -322,6 +334,7 @@ class Cache {
       id: result.id,
       userId: result.userId,
       displayName: result.displayName,
+      pronouns: result.pronouns,
       imageUrl: result.imageUrl,
       expiration: new Date(result.expiration),
     };
