@@ -277,7 +277,7 @@ const app = new Elysia()
           displayName: t.String({
             default: "krn",
           }),
-          pronouns: t.String({ default: "possibly blank" }),
+          pronouns: t.Optional(t.String({ default: "possibly/blank" })),
           image: t.String({
             default:
               "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
