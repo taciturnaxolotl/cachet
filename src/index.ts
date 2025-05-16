@@ -14,8 +14,15 @@ if (process.env.SENTRY_DSN) {
   console.log("Sentry DSN provided, error monitoring is enabled");
   Sentry.init({
     environment: process.env.NODE_ENV,
-    dsn: process.env.SENTRY_DSN, // Replace with your Sentry DSN
-    tracesSampleRate: 1.0, // Adjust this value for performance monitoring
+    dsn: process.env.SENTRY_DSN,
+    tracesSampleRate: 0.5,
+    ignoreErrors: [
+      // Ignore all 404-related errors
+      "Not Found",
+      "404",
+      "user_not_found",
+      "emoji_not_found",
+    ],
   });
 } else {
   console.warn("Sentry DSN not provided, error monitoring is disabled");
@@ -118,16 +125,28 @@ const app = new Elysia()
       },
     }),
   )
-  .onError(({ code, error, request }) => {
+  .onError(({ code, error, request, set }) => {
     if (error instanceof Error)
       console.error(
         `\x1b[31m x\x1b[0m unhandled error: \x1b[31m${error.message}\x1b[0m`,
       );
-    Sentry.withScope((scope) => {
-      scope.setExtra("url", request.url);
-      scope.setExtra("code", code);
-      Sentry.captureException(error);
-    });
+
+    // Don't send 404 errors to Sentry
+    const is404 =
+      set.status === 404 ||
+      (error instanceof Error &&
+        (error.message === "Not Found" ||
+          error.message === "user_not_found" ||
+          error.message === "emoji_not_found"));
+
+    if (!is404) {
+      Sentry.withScope((scope) => {
+        scope.setExtra("url", request.url);
+        scope.setExtra("code", code);
+        Sentry.captureException(error);
+      });
+    }
+
     if (code === "VALIDATION") {
       return error.message;
     }
