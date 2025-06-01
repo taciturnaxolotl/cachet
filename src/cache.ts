@@ -115,7 +115,7 @@ class Cache {
     });
   }
 
-  /*
+  /**
    * Purges expired items from the cache
    * @returns int indicating number of items purged
    */
@@ -136,9 +136,24 @@ class Cache {
     return result.changes + result2.changes;
   }
 
-  /*
+  /**
+   * Purges cache for a specific user
+   * @param userId The Slack user ID to purge from cache
+   * @returns boolean indicating if any user was purged
+   */
+  async purgeUserCache(userId: string): Promise<boolean> {
+    try {
+      const result = this.db.run("DELETE FROM users WHERE userId = ?", [userId]);
+      return result.changes > 0;
+    } catch (error) {
+      console.error("Error purging user cache:", error);
+      return false;
+    }
+  }
+
+  /**
    * Purges all items from the cache
-   * @returns int indicating number of items purged
+   * @returns Object containing purge results
    */
   async purgeAll(): Promise<{
     message: string;

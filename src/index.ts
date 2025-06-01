@@ -95,6 +95,20 @@ const app = new Elysia()
     }),
   )
   .use(
+    cron({
+      name: "purgeSpecificUserCache",
+      pattern: "5 * * * *", // Run at 5 minutes after each hour
+      async run() {
+        const userId = "U062UG485EE";
+        console.log(`Purging cache for user ${userId}`);
+        const result = await cache.purgeUserCache(userId);
+        console.log(
+          `Cache purge for user ${userId}: ${result ? "successful" : "no cache entry found"}`,
+        );
+      },
+    }),
+  )
+  .use(
     swagger({
       exclude: ["/", "favicon.ico"],
       documentation: {
@@ -489,6 +503,42 @@ const app = new Elysia()
           message: t.String(),
           users: t.Number(),
           emojis: t.Number(),
+        }),
+        401: t.String({ default: "Unauthorized" }),
+      },
+    },
+  )
+  .post(
+    "/users/:user/purge",
+    async ({ headers, params, set }) => {
+      if (headers.authorization !== `Bearer ${process.env.BEARER_TOKEN}`) {
+        set.status = 401;
+        return "Unauthorized";
+      }
+
+      const success = await cache.purgeUserCache(params.user);
+
+      return {
+        message: success ? "User cache purged" : "User not found in cache",
+        userId: params.user,
+        success,
+      };
+    },
+    {
+      tags: ["The Cache!"],
+      headers: t.Object({
+        authorization: t.String({
+          default: "Bearer <token>",
+        }),
+      }),
+      params: t.Object({
+        user: t.String(),
+      }),
+      response: {
+        200: t.Object({
+          message: t.String(),
+          userId: t.String(),
+          success: t.Boolean(),
         }),
         401: t.String({ default: "Unauthorized" }),
       },
