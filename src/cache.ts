@@ -143,7 +143,9 @@ class Cache {
    */
   async purgeUserCache(userId: string): Promise<boolean> {
     try {
-      const result = this.db.run("DELETE FROM users WHERE userId = ?", [userId]);
+      const result = this.db.run("DELETE FROM users WHERE userId = ?", [
+        userId.toUpperCase(),
+      ]);
       return result.changes > 0;
     } catch (error) {
       console.error("Error purging user cache:", error);
@@ -216,7 +218,7 @@ class Cache {
            DO UPDATE SET imageUrl = ?, expiration = ?`,
         [
           id,
-          userId,
+          userId.toUpperCase(),
           displayName,
           pronouns,
           imageUrl,
@@ -255,7 +257,15 @@ class Cache {
           VALUES (?, ?, ?, ?, ?)
           ON CONFLICT(name)
           DO UPDATE SET imageUrl = ?, expiration = ?`,
-        [id, name, alias, imageUrl, expiration, imageUrl, expiration],
+        [
+          id,
+          name.toLowerCase(),
+          alias?.toLowerCase() || null,
+          imageUrl,
+          expiration,
+          imageUrl,
+          expiration,
+        ],
       );
       return true;
     } catch (error) {
@@ -288,8 +298,8 @@ class Cache {
              DO UPDATE SET imageUrl = ?, expiration = ?`,
             [
               id,
-              emoji.name,
-              emoji.alias,
+              emoji.name.toLowerCase(),
+              emoji.alias?.toLowerCase() || null,
               emoji.imageUrl,
               expiration,
               emoji.imageUrl,
@@ -333,7 +343,7 @@ class Cache {
   async getUser(userId: string): Promise<User | null> {
     const result = this.db
       .query("SELECT * FROM users WHERE userId = ?")
-      .get(userId) as User;
+      .get(userId.toUpperCase()) as User;
 
     if (!result) {
       return null;
@@ -363,7 +373,7 @@ class Cache {
   async getEmoji(name: string): Promise<Emoji | null> {
     const result = this.db
       .query("SELECT * FROM emojis WHERE name = ? AND expiration > ?")
-      .get(name, Date.now()) as Emoji;
+      .get(name.toLowerCase(), Date.now()) as Emoji;
 
     return result
       ? {

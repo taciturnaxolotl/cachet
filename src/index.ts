@@ -224,7 +224,7 @@ const app = new Elysia()
   .get(
     "/users/:user",
     async ({ params, error, request }) => {
-      const user = await cache.getUser(params.user.toLowerCase());
+      const user = await cache.getUser(params.user);
 
       // if not found then check slack first
       if (!user || !user.imageUrl) {
@@ -424,7 +424,7 @@ const app = new Elysia()
   .get(
     "/emojis/:emoji",
     async ({ params, error }) => {
-      const emoji = await cache.getEmoji(params.emoji.toLowerCase());
+      const emoji = await cache.getEmoji(params.emoji);
 
       if (!emoji) return error(404, { message: "Emoji not found" });
 
@@ -468,7 +468,7 @@ const app = new Elysia()
   .get(
     "/emojis/:emoji/r",
     async ({ params, error, redirect }) => {
-      const emoji = await cache.getEmoji(params.emoji.toLowerCase());
+      const emoji = await cache.getEmoji(params.emoji);
 
       if (!emoji) return error(404, { message: "Emoji not found" });
 
