@@ -1,0 +1,24 @@
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: file commands
+        uses: appleboy/ssh-action@v1
+        with:
+          host: hackclub.app
+          username: kierank
+          key: ${{ secrets.SSH_KEY }}
+          port: 22
+          script: |
+            cd ~/cachet
+            git fetch --all
+            git reset --hard origin/main
+            bun install
+            rm data/cachet.db
+            systemctl --user restart cachet
