@@ -1,14 +1,14 @@
-import { Elysia, t } from "elysia";
-import { logger } from "@tqman/nice-logger";
-import { swagger } from "@elysiajs/swagger";
 import { cors } from "@elysiajs/cors";
 import { cron } from "@elysiajs/cron";
-import { version } from "../package.json";
-import { SlackCache } from "./cache";
-import { SlackWrapper } from "./slackWrapper";
-import type { SlackUser } from "./slack";
-import { getEmojiUrl } from "../utils/emojiHelper";
+import { swagger } from "@elysiajs/swagger";
 import * as Sentry from "@sentry/bun";
+import { logger } from "@tqman/nice-logger";
+import { Elysia, t } from "elysia";
+import { version } from "../package.json";
+import { getEmojiUrl } from "../utils/emojiHelper";
+import { SlackCache } from "./cache";
+import type { SlackUser } from "./slack";
+import { SlackWrapper } from "./slackWrapper";
 
 if (process.env.SENTRY_DSN) {
   console.log("Sentry DSN provided, error monitoring is enabled");
@@ -310,7 +310,7 @@ const app = new Elysia()
           displayName: t.String({
             default: "krn",
           }),
-          pronouns: t.Optional(t.String({ default: "possibly/blank" })),
+          pronouns: t.Nullable(t.String({ default: "possibly/blank" })),
           image: t.String({
             default:
               "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
