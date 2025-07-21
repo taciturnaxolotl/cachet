@@ -288,7 +288,7 @@ const app = new Elysia()
           expiration: new Date().toISOString(),
           user: slackUser.id,
           displayName: displayName,
-          pronouns: slackUser.profile.pronouns,
+          pronouns: slackUser.profile.pronouns || null,
           image: slackUser.profile.image_512,
         };
       }
