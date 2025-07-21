@@ -1,5 +1,6 @@
 import { cors } from "@elysiajs/cors";
 import { cron } from "@elysiajs/cron";
+import { html } from "@elysiajs/html";
 import { swagger } from "@elysiajs/swagger";
 import * as Sentry from "@sentry/bun";
 import { logger } from "@tqman/nice-logger";
@@ -7,6 +8,7 @@ import { Elysia, t } from "elysia";
 import { version } from "../package.json";
 import { getEmojiUrl } from "../utils/emojiHelper";
 import { SlackCache } from "./cache";
+import dashboard from "./dashboard.html" with { type: "text" };
 import type { SlackUser } from "./slack";
 import { SlackWrapper } from "./slackWrapper";
 
@@ -75,6 +77,7 @@ const cache = new SlackCache(
 );
 
 const app = new Elysia()
+  .use(html())
   .use(
     logger({
       mode: "combined",
@@ -194,12 +197,13 @@ const app = new Elysia()
       headers["user-agent"]?.toLowerCase().includes("chrome") ||
       headers["user-agent"]?.toLowerCase().includes("safari")
     ) {
-      return redirect("/swagger", 302);
+      return redirect("/dashboard", 302);
     }
 
-    return "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\n---";
+    return "Hello World from Cachet 😊\n\n---\nSee /swagger for docs\nSee /dashboard for analytics\n---";
   })
   .get("/favicon.ico", Bun.file("./favicon.ico"))
+  .get("/dashboard", () => dashboard)
   .get(
     "/health",
     async ({ error }) => {
@@ -609,6 +613,61 @@ const app = new Elysia()
             t.Object({
               userAgent: t.String(),
               count: t.Number(),
+            }),
+          ),
+          latencyAnalytics: t.Object({
+            percentiles: t.Object({
+              p50: t.Nullable(t.Number()),
+              p75: t.Nullable(t.Number()),
+              p90: t.Nullable(t.Number()),
+              p95: t.Nullable(t.Number()),
+              p99: t.Nullable(t.Number()),
+            }),
+            distribution: t.Array(
+              t.Object({
+                range: t.String(),
+                count: t.Number(),
+                percentage: t.Number(),
+              }),
+            ),
+            slowestEndpoints: t.Array(
+              t.Object({
+                endpoint: t.String(),
+                averageResponseTime: t.Number(),
+                count: t.Number(),
+              }),
+            ),
+            latencyOverTime: t.Array(
+              t.Object({
+                time: t.String(),
+                averageResponseTime: t.Number(),
+                p95: t.Nullable(t.Number()),
+                count: t.Number(),
+              }),
+            ),
+          }),
+          performanceMetrics: t.Object({
+            uptime: t.Number(),
+            errorRate: t.Number(),
+            throughput: t.Number(),
+            apdex: t.Number(),
+            cachehitRate: t.Number(),
+          }),
+          peakTraffic: t.Object({
+            peakHour: t.String(),
+            peakRequests: t.Number(),
+            peakDay: t.String(),
+            peakDayRequests: t.Number(),
+          }),
+          dashboardMetrics: t.Object({
+            statsRequests: t.Number(),
+            totalWithStats: t.Number(),
+          }),
+          trafficOverview: t.Array(
+            t.Object({
+              time: t.String(),
+              routes: t.Record(t.String(), t.Number()),
+              total: t.Number(),
             }),
           ),
         }),

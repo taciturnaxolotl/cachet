@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Cachet Analytics Dashboard</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    sans-serif;
+                background: #f5f5f5;
+                color: #333;
+            }
+
+            .header {
+                background: #fff;
+                padding: 1rem 2rem;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                margin-bottom: 2rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .header h1 {
+                color: #2c3e50;
+            }
+
+            .header-links a {
+                margin-left: 1rem;
+                color: #3498db;
+                text-decoration: none;
+            }
+
+            .header-links a:hover {
+                text-decoration: underline;
+            }
+
+            .controls {
+                margin-bottom: 2rem;
+                text-align: center;
+            }
+
+            .controls select,
+            .controls button {
+                padding: 0.5rem 1rem;
+                margin: 0 0.5rem;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                background: white;
+                cursor: pointer;
+            }
+
+            .controls button {
+                background: #3498db;
+                color: white;
+                border: none;
+            }
+
+            .controls button:hover {
+                background: #2980b9;
+            }
+
+            .dashboard {
+                max-width: 1200px;
+                margin: 0 auto;
+                padding: 0 2rem;
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 1rem;
+                margin-bottom: 2rem;
+            }
+
+            .stat-card {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                text-align: center;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+                font-weight: bold;
+                color: #3498db;
+            }
+
+            .stat-label {
+                color: #666;
+                margin-top: 0.5rem;
+            }
+
+            .charts-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                gap: 2rem;
+                margin-bottom: 2rem;
+            }
+
+            .chart-container {
+                background: white;
+                padding: 1.5rem;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            .chart-title {
+                font-size: 1.2rem;
+                margin-bottom: 1rem;
+                color: #2c3e50;
+            }
+
+            .loading {
+                text-align: center;
+                padding: 2rem;
+                color: #666;
+            }
+
+            .error {
+                background: #e74c3c;
+                color: white;
+                padding: 1rem;
+                border-radius: 4px;
+                margin: 1rem 0;
+            }
+
+            .auto-refresh {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                justify-content: center;
+                margin-top: 1rem;
+            }
+
+            .auto-refresh input[type="checkbox"] {
+                transform: scale(1.2);
+            }
+
+            @media (max-width: 768px) {
+                .charts-grid {
+                    grid-template-columns: 1fr;
+                }
+
+                .dashboard {
+                    padding: 0 1rem;
+                }
+
+                .header {
+                    flex-direction: column;
+                    gap: 1rem;
+                    text-align: center;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>📊 Cachet Analytics Dashboard</h1>
+            <div class="header-links">
+                <a href="/swagger">API Docs</a>
+                <a href="/stats">Raw Stats</a>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="controls">
+                <select id="daysSelect">
+                    <option value="1">Last 24 hours</option>
+                    <option value="7" selected>Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                </select>
+                <button onclick="loadData()">Refresh</button>
+                <div class="auto-refresh">
+                    <input type="checkbox" id="autoRefresh" />
+                    <label for="autoRefresh">Auto-refresh (30s)</label>
+                </div>
+            </div>
+
+            <div id="loading" class="loading">Loading analytics data...</div>
+            <div id="error" class="error" style="display: none"></div>
+
+            <div id="content" style="display: none">
+                <div
+                    class="chart-container"
+                    style="margin-bottom: 2rem; height: 450px"
+                >
+                    <div class="chart-title">
+                        Traffic Overview - All Routes Over Time
+                    </div>
+                    <canvas
+                        id="trafficOverviewChart"
+                        style="padding-bottom: 2rem"
+                    ></canvas>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalRequests">-</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="avgResponseTime">-</div>
+                        <div class="stat-label">Avg Response Time (ms)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="p95ResponseTime">-</div>
+                        <div class="stat-label">P95 Response Time (ms)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="uniqueEndpoints">-</div>
+                        <div class="stat-label">Unique Endpoints</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="errorRate">-</div>
+                        <div class="stat-label">Error Rate (%)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="fastRequests">-</div>
+                        <div class="stat-label">Fast Requests (&lt;100ms)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="uptime">-</div>
+                        <div class="stat-label">Uptime (%)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="throughput">-</div>
+                        <div class="stat-label">Throughput (req/hr)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="apdex">-</div>
+                        <div class="stat-label">APDEX Score</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="cacheHitRate">-</div>
+                        <div class="stat-label">Cache Hit Rate (%)</div>
+                    </div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="peakHour">-</div>
+                        <div class="stat-label">Peak Hour</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="peakHourRequests">-</div>
+                        <div class="stat-label">Peak Hour Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="peakDay">-</div>
+                        <div class="stat-label">Peak Day</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="peakDayRequests">-</div>
+                        <div class="stat-label">Peak Day Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="dashboardRequests">-</div>
+                        <div class="stat-label">Dashboard Requests</div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <div class="chart-title">Requests Over Time</div>
+                        <canvas id="timeChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            Latency Over Time (Hourly)
+                        </div>
+                        <canvas id="latencyTimeChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">
+                            Response Time Distribution
+                        </div>
+                        <canvas id="latencyDistributionChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Latency Percentiles</div>
+                        <canvas id="percentilesChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Top Endpoints</div>
+                        <canvas id="endpointChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Slowest Endpoints</div>
+                        <canvas id="slowestEndpointsChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Status Codes</div>
+                        <canvas id="statusChart"></canvas>
+                    </div>
+
+                    <div class="chart-container">
+                        <div class="chart-title">Top User Agents</div>
+                        <canvas id="userAgentChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let charts = {};
+            let autoRefreshInterval;
+
+            async function loadData() {
+                const days = document.getElementById("daysSelect").value;
+                const loading = document.getElementById("loading");
+                const error = document.getElementById("error");
+                const content = document.getElementById("content");
+
+                loading.style.display = "block";
+                error.style.display = "none";
+                content.style.display = "none";
+
+                try {
+                    const response = await fetch(`/stats?days=${days}`);
+                    if (!response.ok)
+                        throw new Error(`HTTP ${response.status}`);
+
+                    const data = await response.json();
+                    updateDashboard(data);
+
+                    loading.style.display = "none";
+                    content.style.display = "block";
+                } catch (err) {
+                    loading.style.display = "none";
+                    error.style.display = "block";
+                    error.textContent = `Failed to load data: ${err.message}`;
+                }
+            }
+
+            function updateDashboard(data) {
+                // Main metrics
+                document.getElementById("totalRequests").textContent =
+                    data.totalRequests.toLocaleString();
+                document.getElementById("avgResponseTime").textContent =
+                    data.averageResponseTime
+                        ? Math.round(data.averageResponseTime)
+                        : "N/A";
+                document.getElementById("p95ResponseTime").textContent = data
+                    .latencyAnalytics.percentiles.p95
+                    ? Math.round(data.latencyAnalytics.percentiles.p95)
+                    : "N/A";
+                document.getElementById("uniqueEndpoints").textContent =
+                    data.requestsByEndpoint.length;
+
+                const errorRequests = data.requestsByStatus
+                    .filter((s) => s.status >= 400)
+                    .reduce((sum, s) => sum + s.count, 0);
+                const errorRate =
+                    data.totalRequests > 0
+                        ? ((errorRequests / data.totalRequests) * 100).toFixed(
+                              1,
+                          )
+                        : "0.0";
+                document.getElementById("errorRate").textContent = errorRate;
+
+                // Calculate fast requests percentage
+                const fastRequestsData = data.latencyAnalytics.distribution
+                    .filter(
+                        (d) => d.range === "0-50ms" || d.range === "50-100ms",
+                    )
+                    .reduce((sum, d) => sum + d.percentage, 0);
+                document.getElementById("fastRequests").textContent =
+                    fastRequestsData.toFixed(1) + "%";
+
+                // Performance metrics
+                document.getElementById("uptime").textContent =
+                    data.performanceMetrics.uptime.toFixed(1);
+                document.getElementById("throughput").textContent = Math.round(
+                    data.performanceMetrics.throughput,
+                );
+                document.getElementById("apdex").textContent =
+                    data.performanceMetrics.apdex.toFixed(2);
+                document.getElementById("cacheHitRate").textContent =
+                    data.performanceMetrics.cachehitRate.toFixed(1);
+
+                // Peak traffic
+                document.getElementById("peakHour").textContent =
+                    data.peakTraffic.peakHour;
+                document.getElementById("peakHourRequests").textContent =
+                    data.peakTraffic.peakRequests.toLocaleString();
+                document.getElementById("peakDay").textContent =
+                    data.peakTraffic.peakDay;
+                document.getElementById("peakDayRequests").textContent =
+                    data.peakTraffic.peakDayRequests.toLocaleString();
+
+                // Dashboard metrics
+                document.getElementById("dashboardRequests").textContent =
+                    data.dashboardMetrics.statsRequests.toLocaleString();
+
+                // Determine if we're showing hourly or daily data
+                const days = parseInt(
+                    document.getElementById("daysSelect").value,
+                );
+                const isHourly = days === 1;
+
+                updateTrafficOverviewChart(data.trafficOverview, days);
+                updateTimeChart(data.requestsByDay, isHourly);
+                updateLatencyTimeChart(
+                    data.latencyAnalytics.latencyOverTime,
+                    isHourly,
+                );
+                updateLatencyDistributionChart(
+                    data.latencyAnalytics.distribution,
+                );
+                updatePercentilesChart(data.latencyAnalytics.percentiles);
+                updateEndpointChart(data.requestsByEndpoint.slice(0, 10));
+                updateSlowestEndpointsChart(
+                    data.latencyAnalytics.slowestEndpoints,
+                );
+                updateStatusChart(data.requestsByStatus);
+                updateUserAgentChart(data.topUserAgents.slice(0, 5));
+            }
+
+            function updateTrafficOverviewChart(data, days) {
+                const ctx = document
+                    .getElementById("trafficOverviewChart")
+                    .getContext("2d");
+
+                if (charts.trafficOverview) charts.trafficOverview.destroy();
+
+                // Update chart title based on granularity
+                const chartTitle = document
+                    .querySelector("#trafficOverviewChart")
+                    .parentElement.querySelector(".chart-title");
+                let titleText = "Traffic Overview - All Routes Over Time";
+                if (days === 1) {
+                    titleText += " (Hourly)";
+                } else if (days <= 7) {
+                    titleText += " (4-Hour Intervals)";
+                } else {
+                    titleText += " (Daily)";
+                }
+                chartTitle.textContent = titleText;
+
+                // Get all unique routes across all time periods
+                const allRoutes = new Set();
+                data.forEach((timePoint) => {
+                    Object.keys(timePoint.routes).forEach((route) =>
+                        allRoutes.add(route),
+                    );
+                });
+
+                // Define colors for different route types
+                const routeColors = {
+                    Dashboard: "#3498db",
+                    "User Data": "#2ecc71",
+                    "User Redirects": "#27ae60",
+                    "Emoji Data": "#e74c3c",
+                    "Emoji Redirects": "#c0392b",
+                    "Emoji List": "#e67e22",
+                    "Health Check": "#f39c12",
+                    "API Documentation": "#9b59b6",
+                    "Cache Management": "#34495e",
+                };
+
+                // Create datasets for each route
+                const datasets = Array.from(allRoutes).map((route) => {
+                    const color = routeColors[route] || "#95a5a6";
+                    return {
+                        label: route,
+                        data: data.map(
+                            (timePoint) => timePoint.routes[route] || 0,
+                        ),
+                        borderColor: color,
+                        backgroundColor: color + "20", // Add transparency
+                        tension: 0.4,
+                        fill: false,
+                        pointRadius: 2,
+                        pointHoverRadius: 4,
+                    };
+                });
+
+                // Format labels based on time granularity
+                const labels = data.map((timePoint) => {
+                    if (days === 1) {
+                        // Show just hour for 24h view
+                        return timePoint.time.split(" ")[1] || timePoint.time;
+                    } else if (days <= 7) {
+                        // Show day and hour for 7-day view
+                        const parts = timePoint.time.split(" ");
+                        const date = parts[0].split("-")[2]; // Get day
+                        const hour = parts[1] || "00:00";
+                        return `${date} ${hour}`;
+                    } else {
+                        // Show full date for longer periods
+                        return timePoint.time;
+                    }
+                });
+
+                charts.trafficOverview = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: labels,
+                        datasets: datasets,
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: "index",
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                position: "top",
+                                labels: {
+                                    usePointStyle: true,
+                                    padding: 15,
+                                    font: {
+                                        size: 11,
+                                    },
+                                },
+                            },
+                            tooltip: {
+                                mode: "index",
+                                intersect: false,
+                                callbacks: {
+                                    afterLabel: function (context) {
+                                        const timePoint =
+                                            data[context.dataIndex];
+                                        return `Total: ${timePoint.total} requests`;
+                                    },
+                                },
+                            },
+                        },
+                        scales: {
+                            x: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text:
+                                        days === 1
+                                            ? "Hour"
+                                            : days <= 7
+                                              ? "Day & Hour"
+                                              : "Date",
+                                },
+                                ticks: {
+                                    maxTicksLimit: 20,
+                                },
+                            },
+                            y: {
+                                display: true,
+                                title: {
+                                    display: true,
+                                    text: "Requests",
+                                },
+                                beginAtZero: true,
+                            },
+                        },
+                        elements: {
+                            line: {
+                                tension: 0.4,
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updateTimeChart(data, isHourly) {
+                const ctx = document
+                    .getElementById("timeChart")
+                    .getContext("2d");
+
+                if (charts.time) charts.time.destroy();
+
+                // Update chart title
+                const chartTitle = document
+                    .querySelector("#timeChart")
+                    .parentElement.querySelector(".chart-title");
+                chartTitle.textContent = isHourly
+                    ? "Requests Over Time (Hourly)"
+                    : "Requests Over Time (Daily)";
+
+                charts.time = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: data.map((d) =>
+                            isHourly ? d.date.split(" ")[1] : d.date,
+                        ),
+                        datasets: [
+                            {
+                                label: "Requests",
+                                data: data.map((d) => d.count),
+                                borderColor: "#3498db",
+                                backgroundColor: "rgba(52, 152, 219, 0.1)",
+                                tension: 0.4,
+                                fill: true,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updateEndpointChart(data) {
+                const ctx = document
+                    .getElementById("endpointChart")
+                    .getContext("2d");
+
+                if (charts.endpoint) charts.endpoint.destroy();
+
+                charts.endpoint = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: data.map((d) => d.endpoint),
+                        datasets: [
+                            {
+                                label: "Requests",
+                                data: data.map((d) => d.count),
+                                backgroundColor: "#2ecc71",
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: "y",
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updateStatusChart(data) {
+                const ctx = document
+                    .getElementById("statusChart")
+                    .getContext("2d");
+
+                if (charts.status) charts.status.destroy();
+
+                const colors = data.map((d) => {
+                    if (d.status >= 200 && d.status < 300) return "#2ecc71";
+                    if (d.status >= 300 && d.status < 400) return "#f39c12";
+                    if (d.status >= 400 && d.status < 500) return "#e74c3c";
+                    return "#9b59b6";
+                });
+
+                charts.status = new Chart(ctx, {
+                    type: "doughnut",
+                    data: {
+                        labels: data.map((d) => `${d.status}`),
+                        datasets: [
+                            {
+                                data: data.map((d) => d.count),
+                                backgroundColor: colors,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                    },
+                });
+            }
+
+            function updateUserAgentChart(data) {
+                const ctx = document
+                    .getElementById("userAgentChart")
+                    .getContext("2d");
+
+                if (charts.userAgent) charts.userAgent.destroy();
+
+                const labels = data.map((d) => {
+                    const ua = d.userAgent;
+                    if (ua.includes("Chrome")) return "Chrome";
+                    if (ua.includes("Firefox")) return "Firefox";
+                    if (ua.includes("Safari")) return "Safari";
+                    if (ua.includes("curl")) return "curl";
+                    if (ua.includes("bot")) return "Bot";
+                    return "Other";
+                });
+
+                charts.userAgent = new Chart(ctx, {
+                    type: "pie",
+                    data: {
+                        labels: labels,
+                        datasets: [
+                            {
+                                data: data.map((d) => d.count),
+                                backgroundColor: [
+                                    "#3498db",
+                                    "#e74c3c",
+                                    "#2ecc71",
+                                    "#f39c12",
+                                    "#9b59b6",
+                                ],
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                    },
+                });
+            }
+
+            function updateLatencyTimeChart(data, isHourly) {
+                const ctx = document
+                    .getElementById("latencyTimeChart")
+                    .getContext("2d");
+
+                if (charts.latencyTime) charts.latencyTime.destroy();
+
+                // Update chart title
+                const chartTitle = document
+                    .querySelector("#latencyTimeChart")
+                    .parentElement.querySelector(".chart-title");
+                chartTitle.textContent = isHourly
+                    ? "Latency Over Time (Hourly)"
+                    : "Latency Over Time (Daily)";
+
+                charts.latencyTime = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels: data.map((d) =>
+                            isHourly ? d.time.split(" ")[1] : d.time,
+                        ),
+                        datasets: [
+                            {
+                                label: "Average Response Time",
+                                data: data.map((d) => d.averageResponseTime),
+                                borderColor: "#3498db",
+                                backgroundColor: "rgba(52, 152, 219, 0.1)",
+                                tension: 0.4,
+                                yAxisID: "y",
+                            },
+                            {
+                                label: "P95 Response Time",
+                                data: data.map((d) => d.p95),
+                                borderColor: "#e74c3c",
+                                backgroundColor: "rgba(231, 76, 60, 0.1)",
+                                tension: 0.4,
+                                yAxisID: "y",
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: "Response Time (ms)",
+                                },
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updateLatencyDistributionChart(data) {
+                const ctx = document
+                    .getElementById("latencyDistributionChart")
+                    .getContext("2d");
+
+                if (charts.latencyDistribution)
+                    charts.latencyDistribution.destroy();
+
+                charts.latencyDistribution = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: data.map((d) => d.range),
+                        datasets: [
+                            {
+                                label: "Requests",
+                                data: data.map((d) => d.count),
+                                backgroundColor: "#2ecc71",
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updatePercentilesChart(percentiles) {
+                const ctx = document
+                    .getElementById("percentilesChart")
+                    .getContext("2d");
+
+                if (charts.percentiles) charts.percentiles.destroy();
+
+                const data = [
+                    { label: "P50", value: percentiles.p50 },
+                    { label: "P75", value: percentiles.p75 },
+                    { label: "P90", value: percentiles.p90 },
+                    { label: "P95", value: percentiles.p95 },
+                    { label: "P99", value: percentiles.p99 },
+                ].filter((d) => d.value !== null);
+
+                charts.percentiles = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: data.map((d) => d.label),
+                        datasets: [
+                            {
+                                label: "Response Time (ms)",
+                                data: data.map((d) => d.value),
+                                backgroundColor: [
+                                    "#3498db",
+                                    "#2ecc71",
+                                    "#f39c12",
+                                    "#e74c3c",
+                                    "#9b59b6",
+                                ],
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            }
+
+            function updateSlowestEndpointsChart(data) {
+                const ctx = document
+                    .getElementById("slowestEndpointsChart")
+                    .getContext("2d");
+
+                if (charts.slowestEndpoints) charts.slowestEndpoints.destroy();
+
+                charts.slowestEndpoints = new Chart(ctx, {
+                    type: "bar",
+                    data: {
+                        labels: data.map((d) => d.endpoint),
+                        datasets: [
+                            {
+                                label: "Avg Response Time (ms)",
+                                data: data.map((d) => d.averageResponseTime),
+                                backgroundColor: "#e74c3c",
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: "y",
+                        scales: {
+                            x: {
+                                beginAtZero: true,
+                            },
+                        },
+                    },
+                });
+            }
+
+            document
+                .getElementById("autoRefresh")
+                .addEventListener("change", function () {
+                    if (this.checked) {
+                        autoRefreshInterval = setInterval(loadData, 30000);
+                    } else {
+                        clearInterval(autoRefreshInterval);
+                    }
+                });
+
+            loadData();
+            document
+                .getElementById("daysSelect")
+                .addEventListener("change", loadData);
+        </script>
+    </body>
+</html>
