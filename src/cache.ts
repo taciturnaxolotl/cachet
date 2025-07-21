@@ -93,6 +93,31 @@ class Cache {
       )
     `);
 
+    // Create request analytics table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS request_analytics (
+        id TEXT PRIMARY KEY,
+        endpoint TEXT NOT NULL,
+        method TEXT NOT NULL,
+        status_code INTEGER NOT NULL,
+        user_agent TEXT,
+        ip_address TEXT,
+        timestamp INTEGER NOT NULL,
+        response_time INTEGER
+      )
+    `);
+
+    // Create index for faster queries
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_timestamp
+      ON request_analytics(timestamp)
+    `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_endpoint
+      ON request_analytics(endpoint)
+    `);
+
     // check if there are any emojis in the db
     if (this.onEmojiExpired) {
       const result = this.db
@@ -125,6 +150,12 @@ class Cache {
     ]);
     const result2 = this.db.run("DELETE FROM emojis WHERE expiration < ?", [
       Date.now(),
+    ]);
+
+    // Clean up old analytics data (older than 30 days)
+    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    this.db.run("DELETE FROM request_analytics WHERE timestamp < ?", [
+      thirtyDaysAgo,
     ]);
 
     if (this.onEmojiExpired) {
@@ -385,6 +416,186 @@ class Cache {
           expiration: new Date(result.expiration),
         }
       : null;
+  }
+
+  /**
+   * Records a request for analytics
+   * @param endpoint The endpoint that was accessed
+   * @param method HTTP method
+   * @param statusCode HTTP status code
+   * @param userAgent User agent string
+   * @param ipAddress IP address of the client
+   * @param responseTime Response time in milliseconds
+   */
+  async recordRequest(
+    endpoint: string,
+    method: string,
+    statusCode: number,
+    userAgent?: string,
+    ipAddress?: string,
+    responseTime?: number,
+  ): Promise<void> {
+    try {
+      const id = crypto.randomUUID();
+      this.db.run(
+        `INSERT INTO request_analytics
+         (id, endpoint, method, status_code, user_agent, ip_address, timestamp, response_time)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          id,
+          endpoint,
+          method,
+          statusCode,
+          userAgent || null,
+          ipAddress || null,
+          Date.now(),
+          responseTime || null,
+        ],
+      );
+    } catch (error) {
+      console.error("Error recording request analytics:", error);
+    }
+  }
+
+  /**
+   * Gets request analytics statistics
+   * @param days Number of days to look back (default: 7)
+   * @returns Analytics data
+   */
+  async getAnalytics(days: number = 7): Promise<{
+    totalRequests: number;
+    requestsByEndpoint: Array<{
+      endpoint: string;
+      count: number;
+      averageResponseTime: number;
+    }>;
+    requestsByStatus: Array<{
+      status: number;
+      count: number;
+      averageResponseTime: number;
+    }>;
+    requestsByDay: Array<{
+      date: string;
+      count: number;
+      averageResponseTime: number;
+    }>;
+    averageResponseTime: number | null;
+    topUserAgents: Array<{ userAgent: string; count: number }>;
+  }> {
+    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    // Total requests
+    const totalResult = this.db
+      .query(
+        "SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ?",
+      )
+      .get(cutoffTime) as { count: number };
+
+    // Requests by endpoint with average response time
+    const endpointResultsRaw = this.db
+      .query(
+        `
+         SELECT endpoint, COUNT(*) as count, AVG(response_time) as averageResponseTime
+         FROM request_analytics
+         WHERE timestamp > ?
+         GROUP BY endpoint
+         ORDER BY count DESC
+       `,
+      )
+      .all(cutoffTime) as Array<{
+      endpoint: string;
+      count: number;
+      averageResponseTime: number | null;
+    }>;
+
+    const endpointResults = endpointResultsRaw.map((e) => ({
+      endpoint: e.endpoint,
+      count: e.count,
+      averageResponseTime: e.averageResponseTime ?? 0,
+    }));
+
+    // Requests by status code with average response time
+    const statusResultsRaw = this.db
+      .query(
+        `
+         SELECT status_code as status, COUNT(*) as count, AVG(response_time) as averageResponseTime
+         FROM request_analytics
+         WHERE timestamp > ?
+         GROUP BY status_code
+         ORDER BY count DESC
+       `,
+      )
+      .all(cutoffTime) as Array<{
+      status: number;
+      count: number;
+      averageResponseTime: number | null;
+    }>;
+
+    const statusResults = statusResultsRaw.map((s) => ({
+      status: s.status,
+      count: s.count,
+      averageResponseTime: s.averageResponseTime ?? 0,
+    }));
+
+    // Requests by day with average response time
+    const dayResultsRaw = this.db
+      .query(
+        `
+         SELECT
+           DATE(timestamp / 1000, 'unixepoch') as date,
+           COUNT(*) as count,
+           AVG(response_time) as averageResponseTime
+         FROM request_analytics
+         WHERE timestamp > ?
+         GROUP BY DATE(timestamp / 1000, 'unixepoch')
+         ORDER BY date DESC
+       `,
+      )
+      .all(cutoffTime) as Array<{
+      date: string;
+      count: number;
+      averageResponseTime: number | null;
+    }>;
+
+    const dayResults = dayResultsRaw.map((d) => ({
+      date: d.date,
+      count: d.count,
+      averageResponseTime: d.averageResponseTime ?? 0,
+    }));
+
+    // Average response time
+    const avgResponseResult = this.db
+      .query(
+        `
+         SELECT AVG(response_time) as avg
+         FROM request_analytics
+         WHERE timestamp > ? AND response_time IS NOT NULL
+       `,
+      )
+      .get(cutoffTime) as { avg: number | null };
+
+    // Top user agents
+    const userAgentResults = this.db
+      .query(
+        `
+         SELECT user_agent as userAgent, COUNT(*) as count
+         FROM request_analytics
+         WHERE timestamp > ? AND user_agent IS NOT NULL
+         GROUP BY user_agent
+         ORDER BY count DESC
+         LIMIT 10
+       `,
+      )
+      .all(cutoffTime) as Array<{ userAgent: string; count: number }>;
+
+    return {
+      totalRequests: totalResult.count,
+      requestsByEndpoint: endpointResults,
+      requestsByStatus: statusResults,
+      requestsByDay: dayResults,
+      averageResponseTime: avgResponseResult.avg,
+      topUserAgents: userAgentResults,
+    };
   }
 }
 

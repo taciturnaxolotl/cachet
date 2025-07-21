@@ -85,6 +85,27 @@ const app = new Elysia()
       origin: true,
     }),
   )
+  .derive(({ headers }) => ({
+    startTime: Date.now(),
+    userAgent: headers["user-agent"],
+    ipAddress: headers["x-forwarded-for"] || headers["x-real-ip"] || "unknown",
+  }))
+  .onAfterHandle(async ({ request, set, startTime, userAgent, ipAddress }) => {
+    const responseTime = Date.now() - startTime;
+    const endpoint = new URL(request.url).pathname;
+
+    // Don't track favicon or swagger requests
+    if (endpoint !== "/favicon.ico" && !endpoint.startsWith("/swagger")) {
+      await cache.recordRequest(
+        endpoint,
+        request.method,
+        (set.status as number) || 200,
+        userAgent,
+        ipAddress,
+        responseTime,
+      );
+    }
+  })
   .use(
     cron({
       name: "heartbeat",
@@ -541,6 +562,56 @@ const app = new Elysia()
           success: t.Boolean(),
         }),
         401: t.String({ default: "Unauthorized" }),
+      },
+    },
+  )
+  .get(
+    "/stats",
+    async ({ query }) => {
+      const days = query.days ? parseInt(query.days) : 7;
+      const analytics = await cache.getAnalytics(days);
+
+      return analytics;
+    },
+    {
+      tags: ["Status"],
+      query: t.Object({
+        days: t.Optional(
+          t.String({ description: "Number of days to look back (default: 7)" }),
+        ),
+      }),
+      response: {
+        200: t.Object({
+          totalRequests: t.Number(),
+          requestsByEndpoint: t.Array(
+            t.Object({
+              endpoint: t.String(),
+              count: t.Number(),
+              averageResponseTime: t.Number(),
+            }),
+          ),
+          requestsByStatus: t.Array(
+            t.Object({
+              status: t.Number(),
+              count: t.Number(),
+              averageResponseTime: t.Number(),
+            }),
+          ),
+          requestsByDay: t.Array(
+            t.Object({
+              date: t.String(),
+              count: t.Number(),
+              averageResponseTime: t.Number(),
+            }),
+          ),
+          averageResponseTime: t.Nullable(t.Number()),
+          topUserAgents: t.Array(
+            t.Object({
+              userAgent: t.String(),
+              count: t.Number(),
+            }),
+          ),
+        }),
       },
     },
   )
