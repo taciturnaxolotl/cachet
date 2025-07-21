@@ -1,18 +1,10 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+import Bottleneck from "bottleneck";
 import type {
   SlackEmojiListResponse,
   SlackUser,
   SlackUserInfoResponse,
 } from "./slack";
-
-import Bottleneck from "bottleneck";
-
-/**
- * Interface for mapping emoji names to their URLs
- */
-interface SlackEmoji {
-  [key: string]: string;
-}
 
 /**
  * Configuration options for initializing the SlackWrapper
@@ -62,14 +54,19 @@ class SlackWrapper {
    * @throws Error if authentication fails
    */
   async testAuth(): Promise<boolean> {
-    const response = await fetch("https://slack.com/api/auth.test", {
-      headers: {
-        Authorization: `Bearer ${this.botToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await this.limiter.schedule(() =>
+      fetch("https://slack.com/api/auth.test", {
+        headers: {
+          Authorization: `Bearer ${this.botToken}`,
+          "Content-Type": "application/json",
+        },
+      }),
+    );
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      ok: boolean;
+      error: string | null;
+    };
     if (!data.ok) {
       throw new Error(`Authentication failed: ${data.error}`);
     }
@@ -84,19 +81,18 @@ class SlackWrapper {
    * @throws Error if the API request fails
    */
   async getUserInfo(userId: string): Promise<SlackUser> {
-    const response = await fetch(
-      `https://slack.com/api/users.info?user=${userId}`,
-      {
+    const response = await this.limiter.schedule(() =>
+      fetch(`https://slack.com/api/users.info?user=${userId}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.botToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ user: userId }),
-      },
+      }),
     );
 
-    const data: SlackUserInfoResponse = await response.json();
+    const data = (await response.json()) as SlackUserInfoResponse;
     if ((!data.ok && data.error !== "user_not_found") || !data.user) {
       throw new Error(data.error);
     }
@@ -110,14 +106,16 @@ class SlackWrapper {
    * @throws Error if the API request fails
    */
   async getEmojiList(): Promise<Record<string, string>> {
-    const response = await fetch("https://slack.com/api/emoji.list", {
-      headers: {
-        Authorization: `Bearer ${this.botToken}`,
-        "Content-Type": "application/json",
-      },
-    });
+    const response = await this.limiter.schedule(() =>
+      fetch("https://slack.com/api/emoji.list", {
+        headers: {
+          Authorization: `Bearer ${this.botToken}`,
+          "Content-Type": "application/json",
+        },
+      }),
+    );
 
-    const data: SlackEmojiListResponse = await response.json();
+    const data = (await response.json()) as SlackEmojiListResponse;
     if (!data.ok || !data.emoji) {
       throw new Error(`Failed to get emoji list: ${data.error}`);
     }
@@ -137,8 +135,8 @@ class SlackWrapper {
     const hmac = createHmac("sha256", this.signingSecret);
     const computedSignature = `v0=${hmac.update(baseString).digest("hex")}`;
     return timingSafeEqual(
-      Buffer.from(signature).valueOf() as Uint8Array,
-      Buffer.from(computedSignature).valueOf() as Uint8Array,
+      new Uint8Array(Buffer.from(signature)),
+      new Uint8Array(Buffer.from(computedSignature)),
     );
   }
 }
