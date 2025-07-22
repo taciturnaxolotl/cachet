@@ -8,17 +8,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: file commands
-        uses: appleboy/ssh-action@v1
+      - name: Setup Tailscale
+        uses: tailscale/github-action@v3
         with:
-          host: hackclub.app
-          username: kierank
-          key: ${{ secrets.SSH_KEY }}
-          port: 22
-          script: |
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          use-cache: "true"
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
+      - name: file commands
+        run: |
+          ssh kierank@ember << 'EOF'
             cd ~/cachet
             git fetch --all
             git reset --hard origin/main
-            bun install
+            ~/.bun/bin/bun install
             rm data/cachet.db
-            systemctl --user restart cachet
+            sudo /usr/bin/systemctl restart cachet.service
+          EOF
