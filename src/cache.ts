@@ -2,6 +2,7 @@ import { Database } from "bun:sqlite";
 import { schedule } from "node-cron";
 import { MigrationManager } from "./migrations/migrationManager";
 import { endpointGroupingMigration } from "./migrations/endpointGroupingMigration";
+import { logGroupingMigration } from "./migrations/logGroupingMigration";
 
 /**
  * @fileoverview This file contains the Cache class for storing user and emoji data with automatic expiration. To use the module in your project, import the default export and create a new instance of the Cache class. The class provides methods for inserting and retrieving user and emoji data from the cache. The cache automatically purges expired items every hour.
@@ -149,7 +150,10 @@ class Cache {
    */
   private async runMigrations() {
     try {
-      const migrations = [endpointGroupingMigration];
+      const migrations = [
+        endpointGroupingMigration,
+        logGroupingMigration
+      ];
       const migrationManager = new MigrationManager(this.db, migrations);
       const result = await migrationManager.runMigrations();
       
