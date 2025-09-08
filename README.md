@@ -164,14 +164,27 @@ export const myNewMigration: Migration = {
 // Then add to src/migrations/index.ts
 import { myNewMigration } from "./myNewMigration";
 
-export const migrations: Migration[] = [
+export const migrations = [
   endpointGroupingMigration,
   myNewMigration,
   // Add new migrations here
 ];
+
+// IMPORTANT: Also add to src/cache.ts runMigrations method
+private async runMigrations() {
+  try {
+    const migrations = [
+      endpointGroupingMigration,
+      myNewMigration  // Add here too to avoid circular dependencies
+    ];
+    // ...
+  }
+}
 ```
 
 Remember to update the version in `package.json` when adding new migrations.
+
+Note: Migrations must be defined in both `index.ts` and `cache.ts` to avoid circular dependencies in the import structure.
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break.svg" />
