@@ -984,10 +984,14 @@ class Cache {
 
     // Calculate cache hit rate (redirects vs data endpoints)
     const redirectRequests = requestsByEndpoint
-      .filter((e) => e.endpoint.includes("Redirects"))
+      .filter((e) => 
+        e.endpoint === "User Redirects" || 
+        e.endpoint === "Emoji Redirects")
       .reduce((sum, e) => sum + e.count, 0);
     const dataRequests = requestsByEndpoint
-      .filter((e) => e.endpoint.includes("Data"))
+      .filter((e) => 
+        e.endpoint === "User Data" || 
+        e.endpoint === "Emoji Data")
       .reduce((sum, e) => sum + e.count, 0);
     const cachehitRate =
       redirectRequests + dataRequests > 0
