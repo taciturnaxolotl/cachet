@@ -136,6 +136,43 @@ const result = await response.json();
 // { message: "User cache purged", userId: "U062UG485EE", success: true }
 ```
 
+## Development
+
+### Migrations
+
+The app includes a migration system to handle database schema and data changes between versions. Migrations are automatically run when the app starts.
+
+Previous versions are tracked in a `migrations` table in the database, which records each applied migration with its version number and timestamp.
+
+To create a new migration:
+
+```typescript
+// src/migrations/myNewMigration.ts
+import { Database } from "bun:sqlite";
+import { Migration } from "./types";
+
+export const myNewMigration: Migration = {
+  version: "0.3.2", // Should match package.json version
+  description: "What this migration does",
+  
+  async up(db: Database): Promise<void> {
+    // Migration code here
+    db.run(`ALTER TABLE my_table ADD COLUMN new_column TEXT`);
+  }
+};
+
+// Then add to src/migrations/index.ts
+import { myNewMigration } from "./myNewMigration";
+
+export const migrations: Migration[] = [
+  endpointGroupingMigration,
+  myNewMigration,
+  // Add new migrations here
+];
+```
+
+Remember to update the version in `package.json` when adding new migrations.
+
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break.svg" />
 </p>
