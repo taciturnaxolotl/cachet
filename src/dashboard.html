@@ -691,20 +691,10 @@
 
                 if (charts.userAgent) charts.userAgent.destroy();
 
-                const labels = data.map((d) => {
-                    const ua = d.userAgent;
-                    if (ua.includes("Chrome")) return "Chrome";
-                    if (ua.includes("Firefox")) return "Firefox";
-                    if (ua.includes("Safari")) return "Safari";
-                    if (ua.includes("curl")) return "curl";
-                    if (ua.includes("bot")) return "Bot";
-                    return "Other";
-                });
-
                 charts.userAgent = new Chart(ctx, {
                     type: "pie",
                     data: {
-                        labels: labels,
+                        labels: data.map((d) => d.userAgent),
                         datasets: [
                             {
                                 data: data.map((d) => d.count),
@@ -714,6 +704,11 @@
                                     "#2ecc71",
                                     "#f39c12",
                                     "#9b59b6",
+                                    "#34495e",
+                                    "#16a085",
+                                    "#8e44ad",
+                                    "#d35400",
+                                    "#7f8c8d",
                                 ],
                             },
                         ],

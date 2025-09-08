@@ -591,7 +591,18 @@ class Cache {
       } else if (endpoint === "/reset") {
         groupKey = "Cache Management";
       } else {
-        groupKey = endpoint; // Keep as-is for unknown endpoints
+        // For any other endpoints, try to categorize them
+        if (endpoint.includes("/users/") && endpoint.includes("/r")) {
+          groupKey = "User Redirects";
+        } else if (endpoint.includes("/users/")) {
+          groupKey = "User Data";
+        } else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
+          groupKey = "Emoji Redirects";
+        } else if (endpoint.includes("/emojis/")) {
+          groupKey = "Emoji Data";
+        } else {
+          groupKey = "Other";
+        }
       }
 
       if (!endpointGroups[groupKey]) {
@@ -1092,7 +1103,18 @@ class Cache {
         } else if (endpoint === "/reset") {
           groupKey = "Cache Management";
         } else {
-          groupKey = endpoint;
+          // For any other endpoints, try to categorize them
+          if (endpoint.includes("/users/") && endpoint.includes("/r")) {
+            groupKey = "User Redirects";
+          } else if (endpoint.includes("/users/")) {
+            groupKey = "User Data";
+          } else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
+            groupKey = "Emoji Redirects";
+          } else if (endpoint.includes("/emojis/")) {
+            groupKey = "Emoji Data";
+          } else {
+            groupKey = "Other";
+          }
         }
 
         const group = timeGroups[row.time];
@@ -1169,7 +1191,18 @@ class Cache {
         } else if (endpoint === "/reset") {
           groupKey = "Cache Management";
         } else {
-          groupKey = endpoint;
+          // For any other endpoints, try to categorize them
+          if (endpoint.includes("/users/") && endpoint.includes("/r")) {
+            groupKey = "User Redirects";
+          } else if (endpoint.includes("/users/")) {
+            groupKey = "User Data";
+          } else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
+            groupKey = "Emoji Redirects";
+          } else if (endpoint.includes("/emojis/")) {
+            groupKey = "Emoji Data";
+          } else {
+            groupKey = "Other";
+          }
         }
 
         intervalGroups[intervalTime][groupKey] =
@@ -1236,7 +1269,18 @@ class Cache {
         } else if (endpoint === "/reset") {
           groupKey = "Cache Management";
         } else {
-          groupKey = endpoint;
+          // For any other endpoints, try to categorize them
+          if (endpoint.includes("/users/") && endpoint.includes("/r")) {
+            groupKey = "User Redirects";
+          } else if (endpoint.includes("/users/")) {
+            groupKey = "User Data";
+          } else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
+            groupKey = "Emoji Redirects";
+          } else if (endpoint.includes("/emojis/")) {
+            groupKey = "Emoji Data";
+          } else {
+            groupKey = "Other";
+          }
         }
         const group = dayGroups[row.time];
         if (group) {
