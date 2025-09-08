@@ -150,6 +150,9 @@ class Cache {
    */
   private async runMigrations() {
     try {
+      // Define migrations directly here to avoid circular dependencies
+      // Note: We define migrations both here and in migrations/index.ts
+      // This is intentional to prevent circular imports
       const migrations = [
         endpointGroupingMigration,
         logGroupingMigration
