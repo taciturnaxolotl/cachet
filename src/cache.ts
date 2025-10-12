@@ -49,6 +49,11 @@ class Cache {
   private analyticsCache: Map<string, { data: any; timestamp: number }> = new Map();
   private analyticsCacheTTL = 30000; // 30 second cache for faster updates
 
+  // Background user update queue to avoid Slack API limits
+  private userUpdateQueue: Set<string> = new Set();
+  private isProcessingQueue = false;
+  private slackWrapper?: any; // Will be injected after construction
+
   /**
    * Creates a new Cache instance
    * @param dbPath Path to SQLite database file
@@ -66,7 +71,8 @@ class Cache {
 
     this.initDatabase();
     this.setupPurgeSchedule();
-    
+    this.startQueueProcessor();
+
     // Run migrations
     this.runMigrations();
   }
@@ -322,6 +328,77 @@ class Cache {
   }
 
   /**
+   * Sets the Slack wrapper for user updates
+   * @param slackWrapper SlackWrapper instance for API calls
+   */
+  setSlackWrapper(slackWrapper: any) {
+    this.slackWrapper = slackWrapper;
+  }
+
+  /**
+   * Adds a user to the background update queue
+   * @param userId User ID to queue for update
+   * @private
+   */
+  private queueUserUpdate(userId: string) {
+    this.userUpdateQueue.add(userId.toUpperCase());
+  }
+
+  /**
+   * Starts the background queue processor
+   * @private
+   */
+  private startQueueProcessor() {
+    // Process queue every 30 seconds to respect Slack API limits
+    setInterval(async () => {
+      await this.processUserUpdateQueue();
+    }, 30 * 1000);
+  }
+
+  /**
+   * Processes the user update queue with rate limiting
+   * @private
+   */
+  private async processUserUpdateQueue() {
+    if (this.isProcessingQueue || this.userUpdateQueue.size === 0 || !this.slackWrapper) {
+      return;
+    }
+
+    this.isProcessingQueue = true;
+
+    try {
+      // Process up to 3 users at a time to respect API limits
+      const usersToUpdate = Array.from(this.userUpdateQueue).slice(0, 3);
+
+      for (const userId of usersToUpdate) {
+        try {
+          console.log(`Background updating user: ${userId}`);
+          const slackUser = await this.slackWrapper.getUserInfo(userId);
+
+          // Update user in cache with fresh data
+          await this.insertUser(
+            slackUser.id,
+            slackUser.real_name || slackUser.name || "Unknown",
+            slackUser.profile?.pronouns || "",
+            slackUser.profile?.image_512 || slackUser.profile?.image_192 || ""
+          );
+
+          // Remove from queue after successful update
+          this.userUpdateQueue.delete(userId);
+        } catch (error) {
+          console.warn(`Failed to update user ${userId}:`, error);
+          // Remove from queue even if failed to prevent infinite retry
+          this.userUpdateQueue.delete(userId);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing user update queue:", error);
+    } finally {
+      this.isProcessingQueue = false;
+    }
+  }
+
+  /**
    * Inserts a user into the cache
    * @param userId Unique identifier for the user
    * @param imageUrl URL of the user's image
@@ -480,9 +557,31 @@ class Cache {
       return null;
     }
 
-    if (new Date(result.expiration).getTime() < Date.now()) {
+    const now = Date.now();
+    const expiration = new Date(result.expiration).getTime();
+
+    // If user is expired, remove and return null
+    if (expiration < now) {
       this.db.run("DELETE FROM users WHERE userId = ?", [userId]);
       return null;
+    }
+
+    // Touch-to-refresh: if user is older than 24 hours, extend TTL and queue for background update
+    const twentyFourHoursAgo = now - (24 * 60 * 60 * 1000);
+    const userAge = expiration - (7 * 24 * 60 * 60 * 1000); // When user was originally cached
+
+    if (userAge < twentyFourHoursAgo) {
+      // Extend TTL by another 7 days from now
+      const newExpiration = now + (7 * 24 * 60 * 60 * 1000);
+      this.db.run("UPDATE users SET expiration = ? WHERE userId = ?", [
+        newExpiration,
+        userId.toUpperCase()
+      ]);
+
+      // Queue for background update to get fresh data
+      this.queueUserUpdate(userId);
+
+      console.log(`Touch-refresh: Extended TTL for user ${userId} and queued for update`);
     }
 
     return {

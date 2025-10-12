@@ -71,6 +71,9 @@ const cache = new SlackCache(
   },
 );
 
+// Inject SlackWrapper into cache for background user updates
+cache.setSlackWrapper(slackApp);
+
 // Cache maintenance is now handled automatically by cache.ts scheduled tasks
 
 // Start the server
