@@ -71,8 +71,7 @@ const cache = new SlackCache(
   },
 );
 
-// Setup cron jobs
-setupCronJobs();
+// Cache maintenance is now handled automatically by cache.ts scheduled tasks
 
 // Start the server
 const server = serve({
@@ -839,18 +838,5 @@ async function handleGetUserAgents(
   return Response.json(userAgents);
 }
 
-// Setup cron jobs for cache maintenance
-function setupCronJobs() {
-  // Daily purge of all expired items
-  const dailyPurge = setInterval(async () => {
-    const now = new Date();
-    if (now.getHours() === 0 && now.getMinutes() === 0) {
-      await cache.purgeAll();
-    }
-  }, 60 * 1000); // Check every minute
-
-  // Clean up on process exit
-  process.on("exit", () => {
-    clearInterval(dailyPurge);
-  });
-}
+// Cache maintenance is now handled by scheduled tasks in cache.ts
+// No aggressive daily purge needed - users will lazy load with longer TTL

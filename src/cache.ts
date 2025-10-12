@@ -175,13 +175,23 @@ class Cache {
   }
 
   /**
-   * Sets up hourly purge of expired items
+   * Sets up scheduled tasks for cache maintenance
    * @private
    */
   private setupPurgeSchedule() {
-    // Run purge every hour
+    // Run purge every hour at 45 minutes (only expired items, analytics cleanup)
     schedule("45 * * * *", async () => {
       await this.purgeExpiredItems();
+      await this.lazyUserCleanup();
+    });
+
+    // Schedule emoji updates daily at 3 AM to avoid peak hours
+    schedule("0 3 * * *", async () => {
+      console.log("Scheduled emoji update starting...");
+      if (this.onEmojiExpired) {
+        await this.onEmojiExpired();
+        console.log("Scheduled emoji update completed");
+      }
     });
   }
 
@@ -216,26 +226,43 @@ class Cache {
    * @returns int indicating number of items purged
    */
   async purgeExpiredItems(): Promise<number> {
-    const result = this.db.run("DELETE FROM users WHERE expiration < ?", [
-      Date.now(),
-    ]);
+    // Only purge emojis - users will use lazy loading with longer TTL
     const result2 = this.db.run("DELETE FROM emojis WHERE expiration < ?", [
       Date.now(),
     ]);
 
-    // Clean up old analytics data (older than 30 days)
+    // Clean up old analytics data (older than 30 days) - moved to off-peak hours
     const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    this.db.run("DELETE FROM request_analytics WHERE timestamp < ?", [
-      thirtyDaysAgo,
-    ]);
-
-    if (this.onEmojiExpired) {
-      if (result2.changes > 0) {
-        this.onEmojiExpired();
-      }
+    const currentHour = new Date().getHours();
+    // Only run analytics cleanup during off-peak hours (2-6 AM)
+    if (currentHour >= 2 && currentHour < 6) {
+      this.db.run("DELETE FROM request_analytics WHERE timestamp < ?", [
+        thirtyDaysAgo,
+      ]);
+      console.log(`Analytics cleanup completed - removed records older than 30 days`);
     }
 
-    return result.changes + result2.changes;
+    // Emojis are now updated on schedule, not on expiration
+    return result2.changes;
+  }
+
+  /**
+   * Lazy cleanup of truly expired users (older than 7 days) during off-peak hours only
+   * This runs much less frequently than the old aggressive purging
+   * @private
+   */
+  private async lazyUserCleanup(): Promise<void> {
+    const currentHour = new Date().getHours();
+    // Only run during off-peak hours (3-5 AM) and not every time
+    if (currentHour >= 3 && currentHour < 5 && Math.random() < 0.1) { // 10% chance
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+      const result = this.db.run("DELETE FROM users WHERE expiration < ?", [
+        sevenDaysAgo,
+      ]);
+      if (result.changes > 0) {
+        console.log(`Lazy user cleanup: removed ${result.changes} expired users`);
+      }
+    }
   }
 
   /**
@@ -309,8 +336,10 @@ class Cache {
     expirationHours?: number,
   ) {
     const id = crypto.randomUUID();
+    // Users get longer TTL (7 days) for lazy loading, unless custom expiration specified
+    const userDefaultTTL = 7 * 24; // 7 days in hours
     const expiration =
-      Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
+      Date.now() + (expirationHours || userDefaultTTL) * 3600000;
 
     try {
       this.db.run(
