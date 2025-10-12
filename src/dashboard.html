@@ -16,33 +16,39 @@
       body {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           sans-serif;
-        background: #f8fafc;
-        color: #1e293b;
+        background: #f9fafb;
+        color: #111827;
         line-height: 1.6;
       }
 
       .header {
         background: #fff;
-        padding: 1rem 2rem;
+        padding: 1.5rem 2rem;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         margin-bottom: 2rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #e2e8f0;
+        border-bottom: 1px solid #e5e7eb;
       }
 
       .header h1 {
-        color: #2c3e50;
+        color: #111827;
+        font-size: 1.875rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+      }
+
+      .header-links {
+        display: flex;
+        gap: 1.5rem;
       }
 
       .header-links a {
-        margin-left: 1rem;
-        color: #3498db;
+        color: #6366f1;
         text-decoration: none;
+        font-weight: 500;
       }
 
       .header-links a:hover {
+        color: #4f46e5;
         text-decoration: underline;
       }
 
@@ -69,26 +75,24 @@
 
       .controls select:hover,
       .controls select:focus {
-        border-color: #3b82f6;
+        border-color: #6366f1;
         outline: none;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
       }
 
       .controls button {
-        background: #3b82f6;
+        background: #6366f1;
         color: white;
         border: none;
       }
 
       .controls button:hover {
-        background: #2563eb;
-        transform: translateY(-1px);
+        background: #4f46e5;
       }
 
       .controls button:disabled {
         background: #9ca3af;
         cursor: not-allowed;
-        transform: none;
       }
 
       .dashboard {
@@ -99,25 +103,23 @@
 
       .stats-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-        margin-bottom: 2rem;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 3rem;
       }
 
       .stat-card {
         background: white;
-        padding: 1.5rem;
+        padding: 2rem;
         border-radius: 12px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
         text-align: center;
-        border: 1px solid #e2e8f0;
+        border: 1px solid #e5e7eb;
         transition: all 0.2s ease;
-        position: relative;
-        overflow: hidden;
+        min-height: 140px;
         display: flex;
         flex-direction: column;
         justify-content: center;
-        min-height: 120px;
       }
 
       .stat-card:hover {
@@ -125,113 +127,50 @@
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       }
 
-      .stat-card.loading {
-        opacity: 0.6;
-      }
-
-      .stat-card.loading::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: -100%;
-        width: 100%;
-        height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-        animation: shimmer 1.5s infinite;
-      }
-
-      @keyframes shimmer {
-        0% { left: -100%; }
-        100% { left: 100%; }
-      }
-
       .stat-number {
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 0.25rem;
-        word-break: break-word;
-        overflow-wrap: break-word;
-        line-height: 1.1;
-        
-        /* Responsive font sizing using clamp() */
-        font-size: clamp(1.25rem, 4vw, 2.5rem);
+        font-weight: 800;
+        color: #111827;
+        margin-bottom: 0.5rem;
+        font-size: 2.5rem;
+        line-height: 1;
       }
 
       .stat-label {
-        color: #4b5563;
-        margin-top: 0.5rem;
-        font-weight: 500;
-        line-height: 1.3;
-        
-        /* Responsive font sizing for labels */
-        font-size: clamp(0.75rem, 2vw, 0.875rem);
-      }
-
-      /* Container query support for modern browsers */
-      @supports (container-type: inline-size) {
-        .stats-grid {
-          container-type: inline-size;
-        }
-        
-        @container (max-width: 250px) {
-          .stat-number {
-            font-size: 1.25rem;
-          }
-          .stat-label {
-            font-size: 0.75rem;
-          }
-        }
-        
-        @container (min-width: 300px) {
-          .stat-number {
-            font-size: 2rem;
-          }
-          .stat-label {
-            font-size: 0.875rem;
-          }
-        }
-        
-        @container (min-width: 400px) {
-          .stat-number {
-            font-size: 2.5rem;
-          }
-          .stat-label {
-            font-size: 1rem;
-          }
-        }
+        color: #6b7280;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
       .charts-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+        grid-template-columns: 1fr;
         gap: 2rem;
-        margin-bottom: 2rem;
+        margin-bottom: 3rem;
       }
 
-      @media (max-width: 480px) {
-        .charts-grid {
+      .charts-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+
+      @media (max-width: 768px) {
+        .charts-row {
           grid-template-columns: 1fr;
         }
-        
-        .chart-container {
-          min-height: 250px;
-        }
-        
+
         .stats-grid {
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          grid-template-columns: 1fr;
         }
-        
-        .stat-card {
-          padding: 1rem;
-          min-height: 100px;
+
+        .dashboard {
+          padding: 0 1rem;
         }
-        
+
         .stat-number {
-          font-size: clamp(0.9rem, 4vw, 1.5rem) !important;
-        }
-        
-        .stat-label {
-          font-size: clamp(0.65rem, 2.5vw, 0.75rem) !important;
+          font-size: 2rem;
         }
       }
 
@@ -240,75 +179,126 @@
         padding: 1.5rem;
         border-radius: 12px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e2e8f0;
-        position: relative;
-        min-height: 350px;
-        max-height: 500px;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-      }
-
-      .chart-container.loading {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .chart-container.loading::before {
-        content: 'Loading chart...';
-        color: #64748b;
-        font-size: 0.875rem;
+        border: 1px solid #e5e7eb;
+        height: 25rem;
+        padding-bottom: 5rem;
       }
 
       .chart-title {
-        font-size: 1.125rem;
-        margin-bottom: 1rem;
-        padding-top: 1rem;
-        color: #1e293b;
-        font-weight: 600;
-        display: block;
+        font-size: 1.25rem;
+        margin-bottom: 1.5rem;
+        color: #111827;
+        font-weight: 700;
+      }
+
+      .user-agents-table {
+        background: white;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        border: 1px solid #e5e7eb;
+      }
+
+      .search-container {
+        margin-bottom: 1.5rem;
+        position: relative;
+      }
+
+      .search-input {
         width: 100%;
+        padding: 0.75rem 1rem;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        background: #f9fafb;
+        transition: border-color 0.2s ease;
+      }
+
+      .search-input:focus {
+        outline: none;
+        border-color: #6366f1;
+        background: white;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+
+      .ua-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+
+      .ua-table th {
         text-align: left;
+        padding: 0.75rem 1rem;
+        background: #f9fafb;
+        border-bottom: 2px solid #e5e7eb;
+        font-weight: 600;
+        color: #374151;
+        position: sticky;
+        top: 0;
+      }
+
+      .ua-table td {
+        padding: 0.75rem 1rem;
+        border-bottom: 1px solid #f3f4f6;
+        vertical-align: top;
+      }
+
+      .ua-table tbody tr:hover {
+        background: #f9fafb;
+      }
+
+      .ua-name {
+        font-weight: 500;
+        color: #111827;
+        line-height: 1.4;
+        max-width: 400px;
         word-break: break-word;
-        overflow-wrap: break-word;
       }
 
-      .chart-title-with-indicator {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-bottom: 1rem;
+      .ua-raw {
+        font-family: monospace;
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 0.25rem;
+        max-width: 400px;
+        word-break: break-all;
+        line-height: 1.3;
       }
 
-      .chart-title-with-indicator .chart-title {
-        margin-bottom: 0;
-        flex: 1;
-        min-width: 0;
+      .ua-count {
+        font-weight: 600;
+        color: #111827;
+        text-align: right;
+        white-space: nowrap;
       }
 
-      .chart-error {
-        color: #dc2626;
+      .ua-percentage {
+        color: #6b7280;
+        text-align: right;
+        font-size: 0.75rem;
+      }
+
+      .no-results {
         text-align: center;
         padding: 2rem;
-        font-size: 0.875rem;
+        color: #6b7280;
+        font-style: italic;
       }
 
       .loading {
         text-align: center;
         padding: 3rem;
-        color: #64748b;
+        color: #6b7280;
       }
 
       .loading-spinner {
         display: inline-block;
         width: 2rem;
         height: 2rem;
-        border: 3px solid #e2e8f0;
+        border: 3px solid #e5e7eb;
         border-radius: 50%;
-        border-top-color: #3b82f6;
+        border-top-color: #6366f1;
         animation: spin 1s ease-in-out infinite;
         margin-bottom: 1rem;
       }
@@ -331,110 +321,12 @@
         align-items: center;
         gap: 0.5rem;
         font-size: 0.875rem;
-        color: #64748b;
+        color: #6b7280;
       }
 
       .auto-refresh input[type="checkbox"] {
         transform: scale(1.1);
-        accent-color: #3b82f6;
-      }
-
-      .performance-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.25rem;
-        font-size: 0.75rem;
-        color: #64748b;
-      }
-
-      .performance-indicator.good { color: #059669; }
-      .performance-indicator.warning { color: #d97706; }
-      .performance-indicator.error { color: #dc2626; }
-
-      .lazy-chart {
-        min-height: 300px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: #f8fafc;
-        border-radius: 8px;
-        margin: 1rem 0;
-      }
-
-      .lazy-chart.visible {
-        background: transparent;
-      }
-
-      @media (max-width: 768px) {
-        .charts-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .dashboard {
-          padding: 0 1rem;
-        }
-
-        .header {
-          flex-direction: column;
-          gap: 1rem;
-          text-align: center;
-          padding: 1rem;
-        }
-
-        .controls {
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .controls select,
-        .controls button {
-          margin: 0.25rem 0;
-        }
-
-        .stat-number {
-          font-size: clamp(1rem, 5vw, 1.75rem) !important;
-        }
-
-        .stat-label {
-          font-size: clamp(0.7rem, 3vw, 0.8rem) !important;
-        }
-
-        .chart-container {
-          padding: 1rem;
-          min-height: 250px;
-        }
-
-        .chart-title {
-          font-size: 1rem;
-          flex-direction: column;
-          align-items: flex-start;
-        }
-      }
-
-      .toast {
-        position: fixed;
-        top: 1rem;
-        right: 1rem;
-        background: #1f2937;
-        color: white;
-        padding: 0.75rem 1rem;
-        border-radius: 8px;
-        font-size: 0.875rem;
-        z-index: 1000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-      }
-
-      .toast.show {
-        transform: translateX(0);
-      }
-
-      .toast.success {
-        background: #059669;
-      }
-
-      .toast.error {
-        background: #dc2626;
+        accent-color: #6366f1;
       }
     </style>
   </head>
@@ -469,126 +361,44 @@
       <div id="error" class="error" style="display: none"></div>
 
       <div id="content" style="display: none">
-        <!-- Key Metrics Overview -->
-        <div class="chart-container" style="margin-bottom: 2rem; height: 450px">
-          <div class="chart-title-with-indicator">
-            <div class="chart-title">Traffic Overview - All Routes Over Time</div>
-            <span class="performance-indicator" id="trafficPerformance"></span>
-          </div>
-          <canvas
-            id="trafficOverviewChart"
-            style="padding-bottom: 2rem"
-          ></canvas>
-        </div>
-
-        <!-- Stats Grid -->
+        <!-- Key Metrics -->
         <div class="stats-grid">
-          <div class="stat-card" id="totalRequestsCard">
+          <div class="stat-card">
             <div class="stat-number" id="totalRequests">-</div>
             <div class="stat-label">Total Requests</div>
           </div>
-          <div class="stat-card" id="avgResponseTimeCard">
-            <div class="stat-number" id="avgResponseTime">-</div>
-            <div class="stat-label">Avg Response Time (ms)</div>
-          </div>
-          <div class="stat-card" id="p95ResponseTimeCard">
-            <div class="stat-number" id="p95ResponseTime">-</div>
-            <div class="stat-label">P95 Response Time (ms)</div>
-          </div>
-          <div class="stat-card" id="uniqueEndpointsCard">
-            <div class="stat-number" id="uniqueEndpoints">-</div>
-            <div class="stat-label">Unique Endpoints</div>
-          </div>
-          <div class="stat-card" id="errorRateCard">
-            <div class="stat-number" id="errorRate">-</div>
-            <div class="stat-label">Error Rate (%)</div>
-          </div>
-          <div class="stat-card" id="fastRequestsCard">
-            <div class="stat-number" id="fastRequests">-</div>
-            <div class="stat-label">Fast Requests (&lt;100ms)</div>
-          </div>
-          <div class="stat-card" id="uptimeCard">
+          <div class="stat-card">
             <div class="stat-number" id="uptime">-</div>
-            <div class="stat-label">Uptime (%)</div>
+            <div class="stat-label">Uptime</div>
           </div>
-          <div class="stat-card" id="throughputCard">
-            <div class="stat-number" id="throughput">-</div>
-            <div class="stat-label">Throughput (req/hr)</div>
-          </div>
-          <div class="stat-card" id="apdexCard">
-            <div class="stat-number" id="apdex">-</div>
-            <div class="stat-label">APDEX Score</div>
-          </div>
-          <div class="stat-card" id="cacheHitRateCard">
-            <div class="stat-number" id="cacheHitRate">-</div>
-            <div class="stat-label">Cache Hit Rate (%)</div>
+          <div class="stat-card">
+            <div class="stat-number" id="avgResponseTime">-</div>
+            <div class="stat-label">Avg Response Time</div>
           </div>
         </div>
 
-        <!-- Peak Traffic Stats -->
-        <div class="stats-grid">
-          <div class="stat-card" id="peakHourCard">
-            <div class="stat-number" id="peakHour">-</div>
-            <div class="stat-label">Peak Hour</div>
-          </div>
-          <div class="stat-card" id="peakHourRequestsCard">
-            <div class="stat-number" id="peakHourRequests">-</div>
-            <div class="stat-label">Peak Hour Requests</div>
-          </div>
-          <div class="stat-card" id="peakDayCard">
-            <div class="stat-number" id="peakDay">-</div>
-            <div class="stat-label">Peak Day</div>
-          </div>
-          <div class="stat-card" id="peakDayRequestsCard">
-            <div class="stat-number" id="peakDayRequests">-</div>
-            <div class="stat-label">Peak Day Requests</div>
-          </div>
-          <div class="stat-card" id="dashboardRequestsCard">
-            <div class="stat-number" id="dashboardRequests">-</div>
-            <div class="stat-label">Dashboard Requests</div>
-          </div>
-        </div>
-
-        <!-- Charts Grid with Lazy Loading -->
+        <!-- Main Charts -->
         <div class="charts-grid">
-          <div class="chart-container lazy-chart" data-chart="timeChart">
-            <div class="chart-title">Requests Over Time</div>
-            <canvas id="timeChart"></canvas>
+          <div class="charts-row">
+            <div class="chart-container">
+              <div class="chart-title">Requests Over Time</div>
+              <canvas id="requestsChart"></canvas>
+            </div>
+            <div class="chart-container">
+              <div class="chart-title">Latency Over Time</div>
+              <canvas id="latencyChart"></canvas>
+            </div>
           </div>
+        </div>
 
-          <div class="chart-container lazy-chart" data-chart="latencyTimeChart">
-            <div class="chart-title">Latency Over Time (Hourly)</div>
-            <canvas id="latencyTimeChart"></canvas>
+        <!-- User Agents Table -->
+        <div class="user-agents-table">
+          <div class="chart-title">User Agents</div>
+          <div class="search-container">
+            <input type="text" id="userAgentSearch" class="search-input" placeholder="Search user agents...">
           </div>
-
-          <div class="chart-container lazy-chart" data-chart="latencyDistributionChart">
-            <div class="chart-title">Response Time Distribution</div>
-            <canvas id="latencyDistributionChart"></canvas>
-          </div>
-
-          <div class="chart-container lazy-chart" data-chart="percentilesChart">
-            <div class="chart-title">Latency Percentiles</div>
-            <canvas id="percentilesChart"></canvas>
-          </div>
-
-          <div class="chart-container lazy-chart" data-chart="endpointChart">
-            <div class="chart-title">Top Endpoints</div>
-            <canvas id="endpointChart"></canvas>
-          </div>
-
-          <div class="chart-container lazy-chart" data-chart="slowestEndpointsChart">
-            <div class="chart-title">Slowest Endpoints</div>
-            <canvas id="slowestEndpointsChart"></canvas>
-          </div>
-
-          <div class="chart-container lazy-chart" data-chart="statusChart">
-            <div class="chart-title">Status Codes</div>
-            <canvas id="statusChart"></canvas>
-          </div>
-
-          <div class="chart-container lazy-chart" data-chart="userAgentChart">
-            <div class="chart-title">Top User Agents</div>
-            <canvas id="userAgentChart"></canvas>
+          <div id="userAgentsTable">
+            <div class="loading">Loading user agents...</div>
           </div>
         </div>
       </div>
@@ -599,67 +409,8 @@
       let autoRefreshInterval;
       let currentData = null;
       let isLoading = false;
-      let visibleCharts = new Set();
-      let intersectionObserver;
-
-      // Performance monitoring
-      const performance = {
-        startTime: 0,
-        endTime: 0,
-        loadTime: 0
-      };
-
-      // Initialize intersection observer for lazy loading
-      function initLazyLoading() {
-        intersectionObserver = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              const chartContainer = entry.target;
-              const chartType = chartContainer.dataset.chart;
-              
-              if (!visibleCharts.has(chartType) && currentData) {
-                visibleCharts.add(chartType);
-                chartContainer.classList.add('visible');
-                loadChart(chartType, currentData);
-              }
-            }
-          });
-        }, {
-          rootMargin: '50px',
-          threshold: 0.1
-        });
-
-        // Observe all lazy chart containers
-        document.querySelectorAll('.lazy-chart').forEach(container => {
-          intersectionObserver.observe(container);
-        });
-      }
-
-      // Show toast notification
-      function showToast(message, type = 'info') {
-        const toast = document.createElement('div');
-        toast.className = `toast ${type}`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        
-        setTimeout(() => toast.classList.add('show'), 100);
-        setTimeout(() => {
-          toast.classList.remove('show');
-          setTimeout(() => document.body.removeChild(toast), 300);
-        }, 3000);
-      }
-
-      // Update loading states for stat cards
-      function setStatCardLoading(cardId, loading) {
-        const card = document.getElementById(cardId);
-        if (card) {
-          if (loading) {
-            card.classList.add('loading');
-          } else {
-            card.classList.remove('loading');
-          }
-        }
-      }
+      let currentRequestId = 0;
+      let abortController = null;
 
       // Debounced resize handler for charts
       let resizeTimeout;
@@ -677,16 +428,27 @@
       window.addEventListener('resize', handleResize);
 
       async function loadData() {
-        if (isLoading) return;
-        
+        // Cancel any existing requests
+        if (abortController) {
+          abortController.abort();
+        }
+
+        // Create new abort controller for this request
+        abortController = new AbortController();
+        const requestId = ++currentRequestId;
+        const signal = abortController.signal;
+
         isLoading = true;
-        performance.startTime = Date.now();
-        
+        const startTime = Date.now();
+
+        // Capture the days value at the start to ensure consistency
         const days = document.getElementById("daysSelect").value;
         const loading = document.getElementById("loading");
         const error = document.getElementById("error");
         const content = document.getElementById("content");
         const refreshBtn = document.getElementById("refreshBtn");
+
+        console.log(`Starting request ${requestId} for ${days} days`);
 
         // Update UI state
         loading.style.display = "block";
@@ -695,1147 +457,432 @@
         refreshBtn.disabled = true;
         refreshBtn.textContent = "Loading...";
 
-        // Set all stat cards to loading state
-        const statCards = [
-          'totalRequestsCard', 'avgResponseTimeCard', 'p95ResponseTimeCard',
-          'uniqueEndpointsCard', 'errorRateCard', 'fastRequestsCard',
-          'uptimeCard', 'throughputCard', 'apdexCard', 'cacheHitRateCard',
-          'peakHourCard', 'peakHourRequestsCard', 'peakDayCard',
-          'peakDayRequestsCard', 'dashboardRequestsCard'
-        ];
-        statCards.forEach(cardId => setStatCardLoading(cardId, true));
-
         try {
-          const response = await fetch(`/stats?days=${days}`);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          // Step 1: Load essential stats first (fastest)
+          console.log(`[${requestId}] Loading essential stats...`);
+          const essentialResponse = await fetch(`/api/stats/essential?days=${days}`, { signal });
 
-          const data = await response.json();
-          currentData = data;
-          
-          performance.endTime = Date.now();
-          performance.loadTime = performance.endTime - performance.startTime;
-          
-          updateDashboard(data);
-          
+          // Check if this request is still current
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (essential stats)`);
+            return;
+          }
+
+          if (!essentialResponse.ok) throw new Error(`HTTP ${essentialResponse.status}`);
+
+          const essentialData = await essentialResponse.json();
+
+          // Double-check we're still the current request
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (essential stats after response)`);
+            return;
+          }
+
+          updateEssentialStats(essentialData);
+
+          // Show content immediately with essential stats
           loading.style.display = "none";
           content.style.display = "block";
-          
-          showToast(`Dashboard updated in ${performance.loadTime}ms`, 'success');
+          refreshBtn.textContent = "Loading Charts...";
+
+          console.log(`[${requestId}] Essential stats loaded in ${Date.now() - startTime}ms`);
+
+          // Step 2: Load chart data (medium speed)
+          console.log(`[${requestId}] Loading chart data...`);
+          const chartResponse = await fetch(`/api/stats/charts?days=${days}`, { signal });
+
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (chart data)`);
+            return;
+          }
+
+          if (!chartResponse.ok) throw new Error(`HTTP ${chartResponse.status}`);
+
+          const chartData = await chartResponse.json();
+
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (chart data after response)`);
+            return;
+          }
+
+          updateCharts(chartData, parseInt(days));
+          refreshBtn.textContent = "Loading User Agents...";
+
+          console.log(`[${requestId}] Charts loaded in ${Date.now() - startTime}ms`);
+
+          // Step 3: Load user agents last (slowest)
+          console.log(`[${requestId}] Loading user agents...`);
+          const userAgentsResponse = await fetch(`/api/stats/useragents?days=${days}`, { signal });
+
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (user agents)`);
+            return;
+          }
+
+          if (!userAgentsResponse.ok) throw new Error(`HTTP ${userAgentsResponse.status}`);
+
+          const userAgentsData = await userAgentsResponse.json();
+
+          if (requestId !== currentRequestId) {
+            console.log(`[${requestId}] Request cancelled (user agents after response)`);
+            return;
+          }
+
+          updateUserAgentsTable(userAgentsData);
+
+          const totalTime = Date.now() - startTime;
+          console.log(`[${requestId}] All data loaded in ${totalTime}ms`);
         } catch (err) {
-          loading.style.display = "none";
-          error.style.display = "block";
-          error.textContent = `Failed to load data: ${err.message}`;
-          showToast(`Error: ${err.message}`, 'error');
+          // Only show error if this is still the current request
+          if (requestId === currentRequestId) {
+            if (err.name === 'AbortError') {
+              console.log(`[${requestId}] Request aborted`);
+            } else {
+              loading.style.display = "none";
+              error.style.display = "block";
+              error.textContent = `Failed to load data: ${err.message}`;
+              console.error(`[${requestId}] Error: ${err.message}`);
+            }
+          }
         } finally {
-          isLoading = false;
-          refreshBtn.disabled = false;
-          refreshBtn.textContent = "Refresh";
-          
-          // Remove loading state from stat cards
-          statCards.forEach(cardId => setStatCardLoading(cardId, false));
-        }
-      }
-
-      function updateDashboard(data) {
-        // Update main metrics with animation
-        updateStatWithAnimation("totalRequests", data.totalRequests.toLocaleString());
-        updateStatWithAnimation("avgResponseTime", 
-          data.averageResponseTime ? Math.round(data.averageResponseTime) : "N/A");
-        updateStatWithAnimation("p95ResponseTime", 
-          data.latencyAnalytics.percentiles.p95 ? Math.round(data.latencyAnalytics.percentiles.p95) : "N/A");
-        updateStatWithAnimation("uniqueEndpoints", data.requestsByEndpoint.length);
-
-        const errorRequests = data.requestsByStatus
-          .filter((s) => s.status >= 400)
-          .reduce((sum, s) => sum + s.count, 0);
-        const errorRate = data.totalRequests > 0
-          ? ((errorRequests / data.totalRequests) * 100).toFixed(1)
-          : "0.0";
-        updateStatWithAnimation("errorRate", errorRate);
-
-        // Calculate fast requests percentage
-        const fastRequestsData = data.latencyAnalytics.distribution
-          .filter((d) => d.range === "0-50ms" || d.range === "50-100ms")
-          .reduce((sum, d) => sum + d.percentage, 0);
-        updateStatWithAnimation("fastRequests", fastRequestsData.toFixed(1) + "%");
-
-        // Performance metrics
-        updateStatWithAnimation("uptime", data.performanceMetrics.uptime.toFixed(1));
-        updateStatWithAnimation("throughput", Math.round(data.performanceMetrics.throughput));
-        updateStatWithAnimation("apdex", data.performanceMetrics.apdex.toFixed(2));
-        updateStatWithAnimation("cacheHitRate", data.performanceMetrics.cachehitRate.toFixed(1));
-
-        // Peak traffic
-        updateStatWithAnimation("peakHour", data.peakTraffic.peakHour);
-        updateStatWithAnimation("peakHourRequests", data.peakTraffic.peakRequests.toLocaleString());
-        updateStatWithAnimation("peakDay", data.peakTraffic.peakDay);
-        updateStatWithAnimation("peakDayRequests", data.peakTraffic.peakDayRequests.toLocaleString());
-        updateStatWithAnimation("dashboardRequests", data.dashboardMetrics.statsRequests.toLocaleString());
-
-        // Update performance indicator
-        updatePerformanceIndicator(data);
-
-        // Load main traffic overview chart immediately
-        const days = parseInt(document.getElementById("daysSelect").value);
-        updateTrafficOverviewChart(data.trafficOverview, days);
-
-        // Other charts will be loaded lazily when they come into view
-      }
-
-      function updateStatWithAnimation(elementId, value) {
-        const element = document.getElementById(elementId);
-        if (element && element.textContent !== value.toString()) {
-          element.style.transform = 'scale(1.1)';
-          element.style.transition = 'transform 0.2s ease';
-          
-          setTimeout(() => {
-            element.textContent = value;
-            element.style.transform = 'scale(1)';
-          }, 100);
-        }
-      }
-
-      function updatePerformanceIndicator(data) {
-        const indicator = document.getElementById('trafficPerformance');
-        const avgResponseTime = data.averageResponseTime || 0;
-        const errorRate = data.requestsByStatus
-          .filter((s) => s.status >= 400)
-          .reduce((sum, s) => sum + s.count, 0) / data.totalRequests * 100;
-
-        let status, text;
-        if (avgResponseTime < 100 && errorRate < 1) {
-          status = 'good';
-          text = '🟢 Excellent';
-        } else if (avgResponseTime < 300 && errorRate < 5) {
-          status = 'warning';
-          text = '🟡 Good';
-        } else {
-          status = 'error';
-          text = '🔴 Needs Attention';
-        }
-
-        indicator.className = `performance-indicator ${status}`;
-        indicator.textContent = text;
-      }
-
-      // Load individual charts (called by intersection observer)
-      function loadChart(chartType, data) {
-        const days = parseInt(document.getElementById("daysSelect").value);
-        const isHourly = days === 1;
-
-        try {
-          switch(chartType) {
-            case 'timeChart':
-              updateTimeChart(data.requestsByDay, isHourly);
-              break;
-            case 'latencyTimeChart':
-              updateLatencyTimeChart(data.latencyAnalytics.latencyOverTime, isHourly);
-              break;
-            case 'latencyDistributionChart':
-              updateLatencyDistributionChart(data.latencyAnalytics.distribution);
-              break;
-            case 'percentilesChart':
-              updatePercentilesChart(data.latencyAnalytics.percentiles);
-              break;
-            case 'endpointChart':
-              updateEndpointChart(data.requestsByEndpoint.slice(0, 10));
-              break;
-            case 'slowestEndpointsChart':
-              updateSlowestEndpointsChart(data.latencyAnalytics.slowestEndpoints);
-              break;
-            case 'statusChart':
-              updateStatusChart(data.requestsByStatus);
-              break;
-            case 'userAgentChart':
-              updateUserAgentChart(data.topUserAgents.slice(0, 5));
-              break;
-          }
-        } catch (error) {
-          console.error(`Error loading chart ${chartType}:`, error);
-          const container = document.querySelector(`[data-chart="${chartType}"]`);
-          if (container) {
-            container.innerHTML = `<div class="chart-error">Error loading chart: ${error.message}</div>`;
+          // Only update UI if this is still the current request
+          if (requestId === currentRequestId) {
+            isLoading = false;
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = "Refresh";
+            abortController = null;
           }
         }
       }
 
-      function updateTrafficOverviewChart(data, days) {
-        const canvas = document.getElementById("trafficOverviewChart");
-        if (!canvas) {
-          console.warn('trafficOverviewChart canvas not found');
-          return;
-        }
-        
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          console.warn('Could not get 2d context for trafficOverviewChart');
-          return;
-        }
+      // Update just the essential stats (fast)
+      function updateEssentialStats(data) {
+        document.getElementById("totalRequests").textContent = data.totalRequests.toLocaleString();
+        document.getElementById("uptime").textContent = data.uptime.toFixed(1) + "%";
+        document.getElementById("avgResponseTime").textContent =
+          data.averageResponseTime ? Math.round(data.averageResponseTime) + "ms" : "N/A";
+      }
 
-        if (charts.trafficOverview) {
-          charts.trafficOverview.destroy();
-        }
+      // Update charts (medium speed)
+      function updateCharts(data, days) {
+        updateRequestsChart(data.requestsByDay, days === 1);
+        updateLatencyChart(data.latencyOverTime, days === 1);
+      }
 
-        // Update chart title based on granularity
-        const chartTitleElement = document.querySelector(".chart-title-with-indicator .chart-title");
-        let titleText = "Traffic Overview - All Routes Over Time";
-        if (days === 1) {
-          titleText += " (Hourly)";
-        } else if (days <= 7) {
-          titleText += " (4-Hour Intervals)";
-        } else {
-          titleText += " (Daily)";
-        }
-        if (chartTitleElement) {
-          chartTitleElement.textContent = titleText;
-        }
 
-        // Get all unique routes across all time periods
-        const allRoutes = new Set();
-        data.forEach((timePoint) => {
-          Object.keys(timePoint.routes).forEach((route) =>
-            allRoutes.add(route),
-          );
-        });
+      // Requests Over Time Chart
+      function updateRequestsChart(data, isHourly) {
+        const ctx = document.getElementById("requestsChart").getContext("2d");
+        const days = parseInt(document.getElementById("daysSelect").value);
 
-        // Define colors for different route types
-        const routeColors = {
-          Dashboard: "#3b82f6",
-          "User Data": "#10b981",
-          "User Redirects": "#059669",
-          "Emoji Data": "#ef4444",
-          "Emoji Redirects": "#dc2626",
-          "Emoji List": "#f97316",
-          "Health Check": "#f59e0b",
-          "API Documentation": "#8b5cf6",
-          "Cache Management": "#6b7280",
-        };
+        if (charts.requests) charts.requests.destroy();
 
-        // Create datasets for each route
-        const datasets = Array.from(allRoutes).map((route) => {
-          const color = routeColors[route] || "#9ca3af";
-          return {
-            label: route,
-            data: data.map((timePoint) => timePoint.routes[route] || 0),
-            borderColor: color,
-            backgroundColor: color + "20",
-            tension: 0.4,
-            fill: false,
-            pointRadius: 2,
-            pointHoverRadius: 4,
-          };
-        });
-
-        // Format labels based on time granularity
-        const labels = data.map((timePoint) => {
+        // Format labels based on granularity
+        const labels = data.map((d) => {
           if (days === 1) {
-            return timePoint.time.split(" ")[1] || timePoint.time;
+            // 15-minute intervals: show just time
+            return d.date.split(" ")[1] || d.date;
           } else if (days <= 7) {
-            const parts = timePoint.time.split(" ");
-            const date = parts[0].split("-")[2];
+            // Hourly: show date + hour
+            const parts = d.date.split(" ");
+            const date = parts[0].split("-")[2]; // Get day
             const hour = parts[1] || "00:00";
             return `${date} ${hour}`;
           } else {
-            return timePoint.time;
+            // 4-hour intervals: show abbreviated
+            return d.date.split(" ")[0];
           }
         });
 
-        charts.trafficOverview = new Chart(ctx, {
+        charts.requests = new Chart(ctx, {
           type: "line",
           data: {
             labels: labels,
-            datasets: datasets,
+            datasets: [{
+              label: "Requests",
+              data: data.map((d) => d.count),
+              borderColor: "#6366f1",
+              backgroundColor: "rgba(99, 102, 241, 0.1)",
+              tension: 0.4,
+              fill: true,
+              borderWidth: 1.5,
+              pointRadius: 1,
+              pointBackgroundColor: "#6366f1",
+            }],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-              padding: {
-                left: 10,
-                right: 10,
-                top: 10,
-                bottom: 50
-              }
-            },
-            animation: {
-              duration: 750,
-              easing: 'easeInOutQuart'
-            },
-            interaction: {
-              mode: "index",
-              intersect: false,
-            },
             plugins: {
-              legend: {
-                position: "top",
-                labels: {
-                  usePointStyle: true,
-                  padding: 15,
-                  font: {
-                    size: 11,
-                  },
-                  boxWidth: 12,
-                  boxHeight: 12,
-                  generateLabels: function(chart) {
-                    const original = Chart.defaults.plugins.legend.labels.generateLabels;
-                    const labels = original.call(this, chart);
-                    
-                    // Add total request count to legend labels
-                    labels.forEach((label, index) => {
-                      const dataset = chart.data.datasets[index];
-                      const total = dataset.data.reduce((sum, val) => sum + val, 0);
-                      label.text += ` (${total.toLocaleString()})`;
-                    });
-                    
-                    return labels;
-                  }
-                },
-              },
+              legend: { display: false },
               tooltip: {
-                mode: "index",
-                intersect: false,
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
                 callbacks: {
                   title: function(context) {
-                    return `Time: ${context[0].label}`;
-                  },
-                  afterBody: function(context) {
-                    const timePoint = data[context[0].dataIndex];
-                    return [
-                      `Total Requests: ${timePoint.total.toLocaleString()}`,
-                      `Peak Route: ${Object.entries(timePoint.routes).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'}`
-                    ];
-                  },
-                },
-              },
-            },
-            scales: {
-              x: {
-                display: true,
-                title: {
-                  display: true,
-                  text: days === 1 ? "Hour" : days <= 7 ? "Day & Hour" : "Date",
-                  font: {
-                    weight: 'bold'
-                  }
-                },
-                ticks: {
-                  maxTicksLimit: window.innerWidth < 768 ? 8 : 20,
-                  maxRotation: 0, // Don't rotate labels
-                  minRotation: 0,
-                  callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    // Truncate long labels
-                    if (label.length > 8) {
-                      if (days === 1) {
-                        return label; // Hours are usually short
-                      } else {
-                        // For longer periods, abbreviate
-                        return label.substring(0, 6) + '...';
-                      }
-                    }
-                    return label;
-                  }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                display: true,
-                title: {
-                  display: true,
-                  text: "Requests",
-                  font: {
-                    weight: 'bold'
-                  }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return value.toLocaleString();
-                  }
-                }
-              },
-            },
-            elements: {
-              line: {
-                tension: 0.4,
-              },
-              point: {
-                radius: 3,
-                hoverRadius: 6,
-                hitRadius: 10,
-              },
-            },
-          },
-        });
-      }
-
-      function updateTimeChart(data, isHourly) {
-        const canvas = document.getElementById("timeChart");
-        if (!canvas) {
-          console.warn('timeChart canvas not found');
-          return;
-        }
-        
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          console.warn('Could not get 2d context for timeChart');
-          return;
-        }
-
-        if (charts.time) charts.time.destroy();
-
-        const chartTitle = document
-          .querySelector("#timeChart")
-          .parentElement.querySelector(".chart-title");
-        if (chartTitle) {
-          chartTitle.textContent = isHourly
-            ? "Requests Over Time (Hourly)"
-            : "Requests Over Time (Daily)";
-        }
-
-        charts.time = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: data.map((d) => (isHourly ? d.date.split(" ")[1] : d.date)),
-            datasets: [
-              {
-                label: "Requests",
-                data: data.map((d) => d.count),
-                borderColor: "#3b82f6",
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                tension: 0.4,
-                fill: true,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                pointBackgroundColor: "#3b82f6",
-                pointBorderColor: "#ffffff",
-                pointBorderWidth: 2,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: {
-              padding: {
-                left: 10,
-                right: 10,
-                top: 10,
-                bottom: 50 // Extra space for rotated labels
-              }
-            },
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-            plugins: {
-              tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
-                callbacks: {
-                  title: function(context) {
-                    const point = data[context[0].dataIndex];
-                    return isHourly ? `Hour: ${context[0].label}` : `Date: ${context[0].label}`;
-                  },
-                  label: function(context) {
-                    const point = data[context.dataIndex];
-                    return [
-                      `Requests: ${context.parsed.y.toLocaleString()}`,
-                      `Avg Response Time: ${Math.round(point.averageResponseTime || 0)}ms`
-                    ];
-                  }
-                }
-              },
-              legend: {
-                labels: {
-                  generateLabels: function(chart) {
-                    const total = data.reduce((sum, d) => sum + d.count, 0);
-                    const avg = Math.round(data.reduce((sum, d) => sum + (d.averageResponseTime || 0), 0) / data.length);
-                    return [{
-                      text: `Requests (Total: ${total.toLocaleString()}, Avg RT: ${avg}ms)`,
-                      fillStyle: '#3b82f6',
-                      strokeStyle: '#3b82f6',
-                      lineWidth: 2,
-                      pointStyle: 'circle'
-                    }];
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: isHourly ? 'Hour of Day' : 'Date',
-                  font: { weight: 'bold' }
-                },
-                ticks: {
-                  maxTicksLimit: window.innerWidth < 768 ? 6 : 12,
-                  maxRotation: 0, // Don't rotate labels
-                  minRotation: 0,
-                  callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    // Truncate long labels for better fit
-                    if (isHourly) {
-                      return label; // Hours are short
-                    } else {
-                      // For dates, show abbreviated format
-                      const date = new Date(label);
-                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    }
-                  }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Number of Requests',
-                  font: { weight: 'bold' }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return value.toLocaleString();
-                  }
-                }
-              },
-            },
-          },
-        });
-      }
-
-      function updateEndpointChart(data) {
-        const canvas = document.getElementById("endpointChart");
-        if (!canvas) {
-          console.warn('endpointChart canvas not found');
-          return;
-        }
-        
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          console.warn('Could not get 2d context for endpointChart');
-          return;
-        }
-
-        if (charts.endpoint) charts.endpoint.destroy();
-
-        charts.endpoint = new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: data.map((d) => d.endpoint),
-            datasets: [
-              {
-                label: "Requests",
-                data: data.map((d) => d.count),
-                backgroundColor: "#10b981",
-                borderRadius: 4,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            layout: {
-              padding: {
-                left: 10,
-                right: 10,
-                top: 10,
-                bottom: 60 // Extra space for labels
-              }
-            },
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-            indexAxis: "x",
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Endpoints',
-                  font: { weight: 'bold' }
-                },
-                ticks: {
-                  maxRotation: 0, // Don't rotate
-                  minRotation: 0,
-                  callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    // Truncate long labels but show full in tooltip
-                    return label.length > 12 ? label.substring(0, 9) + '...' : label;
-                  }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Number of Requests',
-                  font: { weight: 'bold' }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return value.toLocaleString();
-                  }
-                }
-              },
-            },
-            plugins: {
-              tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
-                callbacks: {
-                  title: function(context) {
-                    return context[0].label; // Show full label in tooltip
+                    const original = data[context[0].dataIndex];
+                    if (days === 1) return `Time: ${original.date}`;
+                    if (days <= 7) return `DateTime: ${original.date}`;
+                    return `Interval: ${original.date}`;
                   },
                   label: function(context) {
                     return `Requests: ${context.parsed.y.toLocaleString()}`;
                   }
                 }
-              },
-              legend: {
-                labels: {
-                  generateLabels: function(chart) {
-                    const total = data.reduce((sum, d) => sum + d.count, 0);
-                    return [{
-                      text: `Total Requests: ${total.toLocaleString()}`,
-                      fillStyle: '#10b981',
-                      strokeStyle: '#10b981',
-                      lineWidth: 2,
-                      pointStyle: 'rect'
-                    }];
-                  }
-                }
               }
             },
-          },
-        });
-      }
-
-      function updateStatusChart(data) {
-        const ctx = document.getElementById("statusChart").getContext("2d");
-
-        if (charts.status) charts.status.destroy();
-
-        const colors = data.map((d) => {
-          if (d.status >= 200 && d.status < 300) return "#10b981";
-          if (d.status >= 300 && d.status < 400) return "#f59e0b";
-          if (d.status >= 400 && d.status < 500) return "#ef4444";
-          return "#8b5cf6";
-        });
-
-        charts.status = new Chart(ctx, {
-          type: "doughnut",
-          data: {
-            labels: data.map((d) => `${d.status}`),
-            datasets: [
-              {
-                data: data.map((d) => d.count),
-                backgroundColor: colors,
-                borderWidth: 2,
-                borderColor: '#fff'
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
+                },
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                  maxTicksLimit: days === 1 ? 12 : 20,
+                  maxRotation: 0,
+                  minRotation: 0
+                }
               },
-            ],
-          },
-          options: {
-            responsive: true,
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-          },
+              y: {
+                title: { display: true, text: 'Requests' },
+                beginAtZero: true,
+                grid: { color: 'rgba(0, 0, 0, 0.05)' }
+              }
+            }
+          }
         });
       }
 
-      function updateUserAgentChart(data) {
-        const ctx = document.getElementById("userAgentChart").getContext("2d");
+      // Latency Over Time Chart
+      function updateLatencyChart(data, isHourly) {
+        const ctx = document.getElementById("latencyChart").getContext("2d");
+        const days = parseInt(document.getElementById("daysSelect").value);
 
-        if (charts.userAgent) charts.userAgent.destroy();
+        if (charts.latency) charts.latency.destroy();
 
-        charts.userAgent = new Chart(ctx, {
-          type: "pie",
-          data: {
-            labels: data.map((d) => d.userAgent),
-            datasets: [
-              {
-                data: data.map((d) => d.count),
-                backgroundColor: [
-                  "#3b82f6",
-                  "#ef4444",
-                  "#10b981",
-                  "#f59e0b",
-                  "#8b5cf6",
-                  "#6b7280",
-                  "#06b6d4",
-                  "#84cc16",
-                  "#f97316",
-                  "#64748b",
-                ],
-                borderWidth: 2,
-                borderColor: '#fff'
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-          },
+        // Format labels based on granularity
+        const labels = data.map((d) => {
+          if (days === 1) {
+            // 15-minute intervals: show just time
+            return d.time.split(" ")[1] || d.time;
+          } else if (days <= 7) {
+            // Hourly: show date + hour
+            const parts = d.time.split(" ");
+            const date = parts[0].split("-")[2]; // Get day
+            const hour = parts[1] || "00:00";
+            return `${date} ${hour}`;
+          } else {
+            // 4-hour intervals: show abbreviated
+            return d.time.split(" ")[0];
+          }
         });
-      }
 
-      function updateLatencyTimeChart(data, isHourly) {
-        const ctx = document.getElementById("latencyTimeChart").getContext("2d");
-
-        if (charts.latencyTime) charts.latencyTime.destroy();
-
-        const chartTitle = document
-          .querySelector("#latencyTimeChart")
-          .parentElement.querySelector(".chart-title");
-        if (chartTitle) {
-          chartTitle.textContent = isHourly
-            ? "Latency Over Time (Hourly)"
-            : "Latency Over Time (Daily)";
-        }
-
-        charts.latencyTime = new Chart(ctx, {
+        charts.latency = new Chart(ctx, {
           type: "line",
           data: {
-            labels: data.map((d) => (isHourly ? d.time.split(" ")[1] : d.time)),
-            datasets: [
-              {
-                label: "Average Response Time",
-                data: data.map((d) => d.averageResponseTime),
-                borderColor: "#3b82f6",
-                backgroundColor: "rgba(59, 130, 246, 0.1)",
-                tension: 0.4,
-                yAxisID: "y",
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                pointBackgroundColor: "#3b82f6",
-                pointBorderColor: "#ffffff",
-                pointBorderWidth: 2,
-              },
-              {
-                label: "P95 Response Time",
-                data: data.map((d) => d.p95),
-                borderColor: "#ef4444",
-                backgroundColor: "rgba(239, 68, 68, 0.1)",
-                tension: 0.4,
-                yAxisID: "y",
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                pointBackgroundColor: "#ef4444",
-                pointBorderColor: "#ffffff",
-                pointBorderWidth: 2,
-              },
-            ],
+            labels: labels,
+            datasets: [{
+              label: "Average Response Time",
+              data: data.map((d) => d.averageResponseTime),
+              borderColor: "#10b981",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              tension: 0.4,
+              fill: true,
+              borderWidth: 1.5,
+              pointRadius: 1,
+              pointBackgroundColor: "#10b981",
+            }],
           },
           options: {
             responsive: true,
             maintainAspectRatio: false,
-            layout: {
-              padding: {
-                left: 10,
-                right: 10,
-                top: 10,
-                bottom: 50
-              }
-            },
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
             plugins: {
+              legend: { display: false },
               tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
                 callbacks: {
                   title: function(context) {
-                    return isHourly ? `Hour: ${context[0].label}` : `Date: ${context[0].label}`;
-                  },
-                  afterBody: function(context) {
-                    const point = data[context[0].dataIndex];
-                    return [
-                      `Request Count: ${point.count.toLocaleString()}`,
-                      `Performance: ${point.averageResponseTime < 100 ? 'Excellent' : point.averageResponseTime < 300 ? 'Good' : 'Needs Attention'}`
-                    ];
-                  }
-                }
-              },
-              legend: {
-                labels: {
-                  generateLabels: function(chart) {
-                    const avgAvg = Math.round(data.reduce((sum, d) => sum + d.averageResponseTime, 0) / data.length);
-                    const avgP95 = Math.round(data.reduce((sum, d) => sum + (d.p95 || 0), 0) / data.length);
-                    return [
-                      {
-                        text: `Average Response Time (Overall: ${avgAvg}ms)`,
-                        fillStyle: '#3b82f6',
-                        strokeStyle: '#3b82f6',
-                        lineWidth: 2,
-                        pointStyle: 'circle'
-                      },
-                      {
-                        text: `P95 Response Time (Overall: ${avgP95}ms)`,
-                        fillStyle: '#ef4444',
-                        strokeStyle: '#ef4444',
-                        lineWidth: 2,
-                        pointStyle: 'circle'
-                      }
-                    ];
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: isHourly ? 'Hour of Day' : 'Date',
-                  font: { weight: 'bold' }
-                },
-                ticks: {
-                  maxTicksLimit: window.innerWidth < 768 ? 6 : 12,
-                  maxRotation: 0,
-                  minRotation: 0,
-                  callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    if (isHourly) {
-                      return label;
-                    } else {
-                      const date = new Date(label);
-                      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                    }
-                  }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: "Response Time (ms)",
-                  font: { weight: 'bold' }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return Math.round(value) + 'ms';
-                  }
-                }
-              },
-            },
-          },
-        });
-      }
-
-      function updateLatencyDistributionChart(data) {
-        const ctx = document.getElementById("latencyDistributionChart").getContext("2d");
-
-        if (charts.latencyDistribution) charts.latencyDistribution.destroy();
-
-        charts.latencyDistribution = new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: data.map((d) => d.range),
-            datasets: [
-              {
-                label: "Requests",
-                data: data.map((d) => d.count),
-                backgroundColor: "#10b981",
-                borderRadius: 4,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-            scales: {
-              y: {
-                beginAtZero: true,
-              },
-            },
-          },
-        });
-      }
-
-      function updatePercentilesChart(percentiles) {
-        const ctx = document.getElementById("percentilesChart").getContext("2d");
-
-        if (charts.percentiles) charts.percentiles.destroy();
-
-        const data = [
-          { label: "P50 (Median)", value: percentiles.p50 },
-          { label: "P75", value: percentiles.p75 },
-          { label: "P90", value: percentiles.p90 },
-          { label: "P95", value: percentiles.p95 },
-          { label: "P99", value: percentiles.p99 },
-        ].filter((d) => d.value !== null);
-
-        charts.percentiles = new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: data.map((d) => d.label),
-            datasets: [
-              {
-                label: "Response Time (ms)",
-                data: data.map((d) => d.value),
-                backgroundColor: [
-                  "#10b981", // P50 - Green (good)
-                  "#3b82f6", // P75 - Blue
-                  "#f59e0b", // P90 - Yellow (warning)
-                  "#ef4444", // P95 - Red (concerning)
-                  "#8b5cf6", // P99 - Purple (critical)
-                ],
-                borderRadius: 4,
-                borderWidth: 2,
-                borderColor: '#ffffff',
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-            plugins: {
-              tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
-                callbacks: {
-                  label: function(context) {
-                    const percentile = context.label;
-                    const value = Math.round(context.parsed.y);
-                    let interpretation = '';
-                    
-                    if (percentile.includes('P50')) {
-                      interpretation = '50% of requests are faster than this';
-                    } else if (percentile.includes('P95')) {
-                      interpretation = '95% of requests are faster than this';
-                    } else if (percentile.includes('P99')) {
-                      interpretation = '99% of requests are faster than this';
-                    }
-                    
-                    return [
-                      `${percentile}: ${value}ms`,
-                      interpretation
-                    ];
-                  }
-                }
-              },
-              legend: {
-                display: false // Hide legend since colors are self-explanatory
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Response Time Percentiles',
-                  font: { weight: 'bold' }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Response Time (ms)',
-                  font: { weight: 'bold' }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return Math.round(value) + 'ms';
-                  }
-                }
-              },
-            },
-          },
-        });
-      }
-
-      function updateSlowestEndpointsChart(data) {
-        const ctx = document.getElementById("slowestEndpointsChart").getContext("2d");
-
-        if (charts.slowestEndpoints) charts.slowestEndpoints.destroy();
-
-        charts.slowestEndpoints = new Chart(ctx, {
-          type: "bar",
-          data: {
-            labels: data.map((d) => d.endpoint),
-            datasets: [
-              {
-                label: "Avg Response Time (ms)",
-                data: data.map((d) => d.averageResponseTime),
-                backgroundColor: "#ef4444",
-                borderRadius: 4,
-              },
-            ],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            animation: {
-              duration: 500,
-              easing: 'easeInOutQuart'
-            },
-            indexAxis: "x", // Changed from "y" to "x" to put labels on top
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: 'Endpoints',
-                  font: { weight: 'bold' }
-                },
-                ticks: {
-                  maxRotation: 45,
-                  minRotation: 45,
-                  callback: function(value, index, values) {
-                    const label = this.getLabelForValue(value);
-                    return label.length > 15 ? label.substring(0, 12) + '...' : label;
-                  }
-                },
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-              },
-              y: {
-                title: {
-                  display: true,
-                  text: 'Response Time (ms)',
-                  font: { weight: 'bold' }
-                },
-                beginAtZero: true,
-                grid: {
-                  color: 'rgba(0, 0, 0, 0.05)',
-                },
-                ticks: {
-                  callback: function(value) {
-                    return Math.round(value) + 'ms';
-                  }
-                }
-              },
-            },
-            plugins: {
-              tooltip: {
-                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                titleColor: 'white',
-                bodyColor: 'white',
-                borderColor: 'rgba(255, 255, 255, 0.1)',
-                borderWidth: 1,
-                callbacks: {
-                  title: function(context) {
-                    return context[0].label; // Show full label in tooltip
+                    const original = data[context[0].dataIndex];
+                    if (days === 1) return `Time: ${original.time}`;
+                    if (days <= 7) return `DateTime: ${original.time}`;
+                    return `Interval: ${original.time}`;
                   },
                   label: function(context) {
                     const point = data[context.dataIndex];
                     return [
-                      `Avg Response Time: ${Math.round(context.parsed.y)}ms`,
+                      `Response Time: ${Math.round(context.parsed.y)}ms`,
                       `Request Count: ${point.count.toLocaleString()}`
                     ];
                   }
                 }
+              }
+            },
+            scales: {
+              x: {
+                title: {
+                  display: true,
+                  text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
+                },
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                  maxTicksLimit: days === 1 ? 12 : 20,
+                  maxRotation: 0,
+                  minRotation: 0
+                }
               },
-              legend: {
-                labels: {
-                  generateLabels: function(chart) {
-                    const avgTime = Math.round(data.reduce((sum, d) => sum + d.averageResponseTime, 0) / data.length);
-                    return [{
-                      text: `Average Response Time: ${avgTime}ms`,
-                      fillStyle: '#ef4444',
-                      strokeStyle: '#ef4444',
-                      lineWidth: 2,
-                      pointStyle: 'rect'
-                    }];
+              y: {
+                type: 'logarithmic',
+                title: { display: true, text: 'Response Time (ms, log scale)' },
+                min: 1,
+                grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                ticks: {
+                  callback: function(value) {
+                    // Show clean numbers: 1, 10, 100, 1000, etc.
+                    if (value === 1 || value === 10 || value === 100 || value === 1000 || value === 10000) {
+                      return value + 'ms';
+                    }
+                    return '';
                   }
                 }
               }
-            },
-          },
+            }
+          }
         });
       }
 
+      // User Agents Table
+      let allUserAgents = [];
+
+      function updateUserAgentsTable(userAgents) {
+        allUserAgents = userAgents;
+        renderUserAgentsTable(userAgents);
+        setupUserAgentSearch();
+      }
+
+      function parseUserAgent(ua) {
+        // Keep strange/unique ones as-is
+        if (ua.length < 50 ||
+            !ua.includes('Mozilla/') ||
+            ua.includes('bot') ||
+            ua.includes('crawler') ||
+            ua.includes('spider') ||
+            !ua.includes('AppleWebKit') ||
+            ua.includes('Shiba-Arcade') ||
+            ua === 'node' ||
+            ua.includes('curl') ||
+            ua.includes('python') ||
+            ua.includes('PostmanRuntime')) {
+          return ua;
+        }
+
+        // Parse common browsers
+        const os = ua.includes('Macintosh') ? 'macOS' :
+                  ua.includes('Windows NT 10.0') ? 'Windows 10' :
+                  ua.includes('Windows NT') ? 'Windows' :
+                  ua.includes('X11; Linux') ? 'Linux' :
+                  ua.includes('iPhone') ? 'iOS' :
+                  ua.includes('Android') ? 'Android' : 'Unknown OS';
+
+        // Detect browser and version
+        let browser = 'Unknown Browser';
+
+        if (ua.includes('Edg/')) {
+          const match = ua.match(/Edg\/(\d+\.\d+)/);
+          const version = match ? match[1] : '';
+          browser = `Edge ${version}`;
+        } else if (ua.includes('Chrome/')) {
+          const match = ua.match(/Chrome\/(\d+\.\d+)/);
+          const version = match ? match[1] : '';
+          browser = `Chrome ${version}`;
+        } else if (ua.includes('Firefox/')) {
+          const match = ua.match(/Firefox\/(\d+\.\d+)/);
+          const version = match ? match[1] : '';
+          browser = `Firefox ${version}`;
+        } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+          browser = 'Safari';
+        }
+
+        return `${browser} (${os})`;
+      }
+
+      function renderUserAgentsTable(userAgents) {
+        const container = document.getElementById("userAgentsTable");
+
+        if (userAgents.length === 0) {
+          container.innerHTML = '<div class="no-results">No user agents found</div>';
+          return;
+        }
+
+        const totalRequests = userAgents.reduce((sum, ua) => sum + ua.count, 0);
+
+        const tableHTML = `
+          <table class="ua-table">
+            <thead>
+              <tr>
+                <th style="width: 50%">User Agent</th>
+                <th style="width: 20%">Requests</th>
+                <th style="width: 15%">Percentage</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${userAgents.map(ua => {
+                const displayName = parseUserAgent(ua.userAgent);
+                const percentage = ((ua.count / totalRequests) * 100).toFixed(1);
+
+                return `
+                  <tr>
+                    <td>
+                      <div class="ua-name">${displayName}</div>
+                      <div class="ua-raw">${ua.userAgent}</div>
+                    </td>
+                    <td class="ua-count">${ua.count.toLocaleString()}</td>
+                    <td class="ua-percentage">${percentage}%</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+
+        container.innerHTML = tableHTML;
+      }
+
+      function setupUserAgentSearch() {
+        const searchInput = document.getElementById('userAgentSearch');
+
+        searchInput.addEventListener('input', function() {
+          const searchTerm = this.value.toLowerCase().trim();
+
+          if (searchTerm === '') {
+            renderUserAgentsTable(allUserAgents);
+            return;
+          }
+
+          const filtered = allUserAgents.filter(ua => {
+            const displayName = parseUserAgent(ua.userAgent).toLowerCase();
+            const rawUA = ua.userAgent.toLowerCase();
+            return displayName.includes(searchTerm) || rawUA.includes(searchTerm);
+          });
+
+          renderUserAgentsTable(filtered);
+        });
+      }
+
+      // Event Handlers
       document.getElementById("autoRefresh").addEventListener("change", function () {
         if (this.checked) {
           autoRefreshInterval = setInterval(loadData, 30000);
-          showToast('Auto-refresh enabled', 'success');
         } else {
           clearInterval(autoRefreshInterval);
-          showToast('Auto-refresh disabled', 'info');
         }
       });
 
-      // Days selector change handler
-      document.getElementById("daysSelect").addEventListener("change", function() {
-        // Reset visible charts when changing time period
-        visibleCharts.clear();
-        loadData();
-      });
+      document.getElementById("daysSelect").addEventListener("change", loadData);
 
       // Initialize dashboard
-      document.addEventListener('DOMContentLoaded', function() {
-        initLazyLoading();
-        loadData();
-      });
+      document.addEventListener('DOMContentLoaded', loadData);
 
       // Cleanup on page unload
       window.addEventListener('beforeunload', function() {
-        if (intersectionObserver) {
-          intersectionObserver.disconnect();
-        }
         clearInterval(autoRefreshInterval);
-        
-        // Destroy all charts to prevent memory leaks
         Object.values(charts).forEach(chart => {
           if (chart && typeof chart.destroy === 'function') {
             chart.destroy();

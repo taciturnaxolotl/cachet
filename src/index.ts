@@ -322,7 +322,82 @@ const server = serve({
       },
     },
 
-    // Stats endpoint
+    // Fast essential stats endpoint - loads immediately
+    "/api/stats/essential": {
+      async GET(request) {
+        const startTime = Date.now();
+        const recordAnalytics = async (statusCode: number) => {
+          const userAgent = request.headers.get("user-agent") || "";
+          const ipAddress =
+            request.headers.get("x-forwarded-for") ||
+            request.headers.get("x-real-ip") ||
+            "unknown";
+
+          await cache.recordRequest(
+            "/api/stats/essential",
+            "GET",
+            statusCode,
+            userAgent,
+            ipAddress,
+            Date.now() - startTime,
+          );
+        };
+
+        return handleGetEssentialStats(request, recordAnalytics);
+      },
+    },
+
+    // Chart data endpoint - loads after essential stats
+    "/api/stats/charts": {
+      async GET(request) {
+        const startTime = Date.now();
+        const recordAnalytics = async (statusCode: number) => {
+          const userAgent = request.headers.get("user-agent") || "";
+          const ipAddress =
+            request.headers.get("x-forwarded-for") ||
+            request.headers.get("x-real-ip") ||
+            "unknown";
+
+          await cache.recordRequest(
+            "/api/stats/charts",
+            "GET",
+            statusCode,
+            userAgent,
+            ipAddress,
+            Date.now() - startTime,
+          );
+        };
+
+        return handleGetChartData(request, recordAnalytics);
+      },
+    },
+
+    // User agents endpoint - loads last
+    "/api/stats/useragents": {
+      async GET(request) {
+        const startTime = Date.now();
+        const recordAnalytics = async (statusCode: number) => {
+          const userAgent = request.headers.get("user-agent") || "";
+          const ipAddress =
+            request.headers.get("x-forwarded-for") ||
+            request.headers.get("x-real-ip") ||
+            "unknown";
+
+          await cache.recordRequest(
+            "/api/stats/useragents",
+            "GET",
+            statusCode,
+            userAgent,
+            ipAddress,
+            Date.now() - startTime,
+          );
+        };
+
+        return handleGetUserAgents(request, recordAnalytics);
+      },
+    },
+
+    // Original stats endpoint (for backwards compatibility)
     "/stats": {
       async GET(request) {
         const startTime = Date.now();
@@ -717,6 +792,51 @@ async function handleGetStats(
 
   await recordAnalytics(200);
   return Response.json(analytics);
+}
+
+// Fast essential stats - just the 3 key metrics
+async function handleGetEssentialStats(
+  request: Request,
+  recordAnalytics: (statusCode: number) => Promise<void>,
+) {
+  const url = new URL(request.url);
+  const params = new URLSearchParams(url.search);
+  const days = params.get("days") ? parseInt(params.get("days")!) : 7;
+
+  const essentialStats = await cache.getEssentialStats(days);
+
+  await recordAnalytics(200);
+  return Response.json(essentialStats);
+}
+
+// Chart data - requests and latency over time
+async function handleGetChartData(
+  request: Request,
+  recordAnalytics: (statusCode: number) => Promise<void>,
+) {
+  const url = new URL(request.url);
+  const params = new URLSearchParams(url.search);
+  const days = params.get("days") ? parseInt(params.get("days")!) : 7;
+
+  const chartData = await cache.getChartData(days);
+
+  await recordAnalytics(200);
+  return Response.json(chartData);
+}
+
+// User agents data - slowest loading part
+async function handleGetUserAgents(
+  request: Request,
+  recordAnalytics: (statusCode: number) => Promise<void>,
+) {
+  const url = new URL(request.url);
+  const params = new URLSearchParams(url.search);
+  const days = params.get("days") ? parseInt(params.get("days")!) : 7;
+
+  const userAgents = await cache.getUserAgents(days);
+
+  await recordAnalytics(200);
+  return Response.json(userAgents);
 }
 
 // Setup cron jobs for cache maintenance

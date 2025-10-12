@@ -47,7 +47,7 @@ class Cache {
   private defaultExpiration: number; // in hours
   private onEmojiExpired?: () => void;
   private analyticsCache: Map<string, { data: any; timestamp: number }> = new Map();
-  private analyticsCacheTTL = 60000; // 1 minute cache for analytics
+  private analyticsCacheTTL = 30000; // 30 second cache for faster updates
 
   /**
    * Creates a new Cache instance
@@ -139,11 +139,29 @@ class Cache {
       ON request_analytics(timestamp, endpoint, status_code)
     `);
 
+    // Additional performance indexes
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_user_agent
+      ON request_analytics(user_agent, timestamp) WHERE user_agent IS NOT NULL
+    `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_time_response
+      ON request_analytics(timestamp, response_time) WHERE response_time IS NOT NULL
+    `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_exclude_stats
+      ON request_analytics(timestamp, endpoint, status_code) WHERE endpoint != '/stats'
+    `);
+
     // Enable WAL mode for better concurrent performance
     this.db.run('PRAGMA journal_mode = WAL');
     this.db.run('PRAGMA synchronous = NORMAL');
-    this.db.run('PRAGMA cache_size = 10000');
+    this.db.run('PRAGMA cache_size = 50000'); // Increased cache size
     this.db.run('PRAGMA temp_store = memory');
+    this.db.run('PRAGMA mmap_size = 268435456'); // 256MB memory map
+    this.db.run('PRAGMA page_size = 4096'); // Optimal page size
 
     // check if there are any emojis in the db
     if (this.onEmojiExpired) {
@@ -733,7 +751,45 @@ class Cache {
     }>;
 
     if (days === 1) {
-      // Hourly data for last 24 hours (excluding stats)
+      // 15-minute intervals for last 24 hours (excluding stats)
+      const intervalResultsRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END as date,
+             COUNT(*) as count,
+             AVG(response_time) as averageResponseTime
+           FROM request_analytics
+           WHERE timestamp > ? AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END
+           ORDER BY date ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        date: string;
+        count: number;
+        averageResponseTime: number | null;
+      }>;
+
+      timeResults = intervalResultsRaw.map((h) => ({
+        date: h.date,
+        count: h.count,
+        averageResponseTime: h.averageResponseTime ?? 0,
+      }));
+    } else if (days <= 7) {
+      // Hourly data for 7 days (excluding stats)
       const hourResultsRaw = this.db
         .query(
           `
@@ -759,17 +815,33 @@ class Cache {
         averageResponseTime: h.averageResponseTime ?? 0,
       }));
     } else {
-      // Daily data for longer periods (excluding stats)
-      const dayResultsRaw = this.db
+      // 4-hour intervals for longer periods (excluding stats)
+      const intervalResultsRaw = this.db
         .query(
           `
            SELECT
-             DATE(timestamp / 1000, 'unixepoch') as date,
+             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END as date,
              COUNT(*) as count,
              AVG(response_time) as averageResponseTime
            FROM request_analytics
            WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY DATE(timestamp / 1000, 'unixepoch')
+           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END
            ORDER BY date ASC
          `,
         )
@@ -779,7 +851,7 @@ class Cache {
         averageResponseTime: number | null;
       }>;
 
-      timeResults = dayResultsRaw.map((d) => ({
+      timeResults = intervalResultsRaw.map((d) => ({
         date: d.date,
         count: d.count,
         averageResponseTime: d.averageResponseTime ?? 0,
@@ -797,68 +869,19 @@ class Cache {
       )
       .get(cutoffTime) as { avg: number | null };
 
-    // Top user agents (simplified and grouped, excluding stats)
-    const rawUserAgentResults = this.db
+    // Top user agents (raw strings, excluding stats) - optimized with index hint
+    const topUserAgents = this.db
       .query(
         `
          SELECT user_agent as userAgent, COUNT(*) as count
-         FROM request_analytics
+         FROM request_analytics INDEXED BY idx_request_analytics_user_agent
          WHERE timestamp > ? AND user_agent IS NOT NULL AND endpoint != '/stats'
          GROUP BY user_agent
          ORDER BY count DESC
-         LIMIT 20
+         LIMIT 50
        `,
       )
       .all(cutoffTime) as Array<{ userAgent: string; count: number }>;
-
-    // Group user agents intelligently
-    const userAgentGroups: Record<string, number> = {};
-
-    for (const result of rawUserAgentResults) {
-      const ua = result.userAgent.toLowerCase();
-      let groupKey: string;
-
-      if (ua.includes("chrome") && !ua.includes("edg")) {
-        groupKey = "Chrome";
-      } else if (ua.includes("firefox")) {
-        groupKey = "Firefox";
-      } else if (ua.includes("safari") && !ua.includes("chrome")) {
-        groupKey = "Safari";
-      } else if (ua.includes("edg")) {
-        groupKey = "Edge";
-      } else if (ua.includes("curl")) {
-        groupKey = "curl";
-      } else if (ua.includes("wget")) {
-        groupKey = "wget";
-      } else if (ua.includes("postman")) {
-        groupKey = "Postman";
-      } else if (
-        ua.includes("bot") ||
-        ua.includes("crawler") ||
-        ua.includes("spider")
-      ) {
-        groupKey = "Bots/Crawlers";
-      } else if (ua.includes("python")) {
-        groupKey = "Python Scripts";
-      } else if (
-        ua.includes("node") ||
-        ua.includes("axios") ||
-        ua.includes("fetch")
-      ) {
-        groupKey = "API Clients";
-      } else {
-        groupKey = "Other";
-      }
-
-      userAgentGroups[groupKey] =
-        (userAgentGroups[groupKey] || 0) + result.count;
-    }
-
-    // Convert back to array format, sorted by count
-    const topUserAgents = Object.entries(userAgentGroups)
-      .map(([userAgent, count]) => ({ userAgent, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
 
     // Enhanced Latency Analytics
 
@@ -935,7 +958,47 @@ class Cache {
     }>;
 
     if (days === 1) {
-      // Hourly latency data for last 24 hours (excluding stats)
+      // 15-minute intervals for last 24 hours (excluding stats)
+      const latencyOverTimeRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END as time,
+             AVG(response_time) as averageResponseTime,
+             COUNT(*) as count
+           FROM request_analytics
+           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END
+           ORDER BY time ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        time: string;
+        averageResponseTime: number;
+        count: number;
+      }>;
+
+      // For 15-minute intervals, we'll skip P95 calculation to improve performance
+      latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
+        time: intervalData.time,
+        averageResponseTime: intervalData.averageResponseTime,
+        p95: null, // Skip P95 for better performance with high granularity
+        count: intervalData.count,
+      }));
+    } else if (days <= 7) {
+      // Hourly latency data for 7 days (excluding stats)
       const latencyOverTimeRaw = this.db
         .query(
           `
@@ -955,46 +1018,40 @@ class Cache {
         count: number;
       }>;
 
-      // Calculate P95 for each hour
-      latencyOverTime = latencyOverTimeRaw.map((hourData) => {
-        const hourStart = new Date(hourData.time).getTime();
-        const hourEnd = hourStart + 60 * 60 * 1000; // 1 hour later
-
-        const hourResponseTimes = this.db
-          .query(
-            `
-             SELECT response_time
-             FROM request_analytics
-             WHERE timestamp >= ? AND timestamp < ? AND response_time IS NOT NULL AND endpoint != '/stats'
-             ORDER BY response_time
-           `,
-          )
-          .all(hourStart, hourEnd) as Array<{ response_time: number }>;
-
-        const hourTimes = hourResponseTimes
-          .map((r) => r.response_time)
-          .sort((a, b) => a - b);
-        const p95 = calculatePercentile(hourTimes, 95);
-
-        return {
-          time: hourData.time,
-          averageResponseTime: hourData.averageResponseTime,
-          p95,
-          count: hourData.count,
-        };
-      });
+      latencyOverTime = latencyOverTimeRaw.map((hourData) => ({
+        time: hourData.time,
+        averageResponseTime: hourData.averageResponseTime,
+        p95: null, // Skip P95 for better performance
+        count: hourData.count,
+      }));
     } else {
-      // Daily latency data for longer periods (excluding stats)
+      // 4-hour intervals for longer periods (excluding stats)
       const latencyOverTimeRaw = this.db
         .query(
           `
            SELECT
-             DATE(timestamp / 1000, 'unixepoch') as time,
+             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END as time,
              AVG(response_time) as averageResponseTime,
              COUNT(*) as count
            FROM request_analytics
            WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY DATE(timestamp / 1000, 'unixepoch')
+           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END
            ORDER BY time ASC
          `,
         )
@@ -1004,34 +1061,12 @@ class Cache {
         count: number;
       }>;
 
-      // Calculate P95 for each day
-      latencyOverTime = latencyOverTimeRaw.map((dayData) => {
-        const dayStart = new Date(dayData.time + " 00:00:00").getTime();
-        const dayEnd = dayStart + 24 * 60 * 60 * 1000; // 1 day later
-
-        const dayResponseTimes = this.db
-          .query(
-            `
-             SELECT response_time
-             FROM request_analytics
-             WHERE timestamp >= ? AND timestamp < ? AND response_time IS NOT NULL AND endpoint != '/stats'
-             ORDER BY response_time
-           `,
-          )
-          .all(dayStart, dayEnd) as Array<{ response_time: number }>;
-
-        const dayTimes = dayResponseTimes
-          .map((r) => r.response_time)
-          .sort((a, b) => a - b);
-        const p95 = calculatePercentile(dayTimes, 95);
-
-        return {
-          time: dayData.time,
-          averageResponseTime: dayData.averageResponseTime,
-          p95,
-          count: dayData.count,
-        };
-      });
+      latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
+        time: intervalData.time,
+        averageResponseTime: intervalData.averageResponseTime,
+        p95: null, // Skip P95 for better performance
+        count: intervalData.count,
+      }));
     }
 
     // Performance Metrics
@@ -1406,6 +1441,380 @@ class Cache {
     }
 
     return result;
+  }
+
+  /**
+   * Gets essential stats only (fast loading)
+   * @param days Number of days to look back (default: 7)
+   * @returns Essential stats data
+   */
+  async getEssentialStats(days: number = 7): Promise<{
+    totalRequests: number;
+    averageResponseTime: number | null;
+    uptime: number;
+  }> {
+    // Check cache first
+    const cacheKey = `essential_${days}`;
+    const cached = this.analyticsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.analyticsCacheTTL) {
+      return cached.data;
+    }
+
+    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    // Total requests (excluding stats endpoint) - fastest query
+    const totalResult = this.db
+      .query(
+        "SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND endpoint != '/stats'",
+      )
+      .get(cutoffTime) as { count: number };
+
+    // Average response time (excluding stats) - simple query
+    const avgResponseResult = this.db
+      .query(
+        "SELECT AVG(response_time) as avg FROM request_analytics WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'",
+      )
+      .get(cutoffTime) as { avg: number | null };
+
+    // Simple error rate calculation for uptime
+    const errorRequests = this.db
+      .query(
+        "SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND status_code >= 400 AND endpoint != '/stats'",
+      )
+      .get(cutoffTime) as { count: number };
+
+    const errorRate = totalResult.count > 0 ? (errorRequests.count / totalResult.count) * 100 : 0;
+    const uptime = Math.max(0, 100 - errorRate * 2); // Simple approximation
+
+    const result = {
+      totalRequests: totalResult.count,
+      averageResponseTime: avgResponseResult.avg,
+      uptime: uptime,
+    };
+
+    // Cache the result
+    this.analyticsCache.set(cacheKey, {
+      data: result,
+      timestamp: now
+    });
+
+    return result;
+  }
+
+  /**
+   * Gets chart data only (requests and latency over time)
+   * @param days Number of days to look back (default: 7)
+   * @returns Chart data
+   */
+  async getChartData(days: number = 7): Promise<{
+    requestsByDay: Array<{
+      date: string;
+      count: number;
+      averageResponseTime: number;
+    }>;
+    latencyOverTime: Array<{
+      time: string;
+      averageResponseTime: number;
+      p95: number | null;
+      count: number;
+    }>;
+  }> {
+    // Check cache first
+    const cacheKey = `charts_${days}`;
+    const cached = this.analyticsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.analyticsCacheTTL) {
+      return cached.data;
+    }
+
+    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    // Reuse the existing time logic from getAnalytics
+    let timeResults: Array<{
+      date: string;
+      count: number;
+      averageResponseTime: number;
+    }>;
+
+    if (days === 1) {
+      // 15-minute intervals for last 24 hours (excluding stats)
+      const intervalResultsRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END as date,
+             COUNT(*) as count,
+             AVG(response_time) as averageResponseTime
+           FROM request_analytics
+           WHERE timestamp > ? AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END
+           ORDER BY date ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        date: string;
+        count: number;
+        averageResponseTime: number | null;
+      }>;
+
+      timeResults = intervalResultsRaw.map((h) => ({
+        date: h.date,
+        count: h.count,
+        averageResponseTime: h.averageResponseTime ?? 0,
+      }));
+    } else if (days <= 7) {
+      // Hourly data for 7 days (excluding stats)
+      const hourResultsRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as date,
+             COUNT(*) as count,
+             AVG(response_time) as averageResponseTime
+           FROM request_analytics
+           WHERE timestamp > ? AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
+           ORDER BY date ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        date: string;
+        count: number;
+        averageResponseTime: number | null;
+      }>;
+
+      timeResults = hourResultsRaw.map((h) => ({
+        date: h.date,
+        count: h.count,
+        averageResponseTime: h.averageResponseTime ?? 0,
+      }));
+    } else {
+      // 4-hour intervals for longer periods (excluding stats)
+      const intervalResultsRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END as date,
+             COUNT(*) as count,
+             AVG(response_time) as averageResponseTime
+           FROM request_analytics
+           WHERE timestamp > ? AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END
+           ORDER BY date ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        date: string;
+        count: number;
+        averageResponseTime: number | null;
+      }>;
+
+      timeResults = intervalResultsRaw.map((d) => ({
+        date: d.date,
+        count: d.count,
+        averageResponseTime: d.averageResponseTime ?? 0,
+      }));
+    }
+
+    // Latency over time data (reuse from getAnalytics)
+    let latencyOverTime: Array<{
+      time: string;
+      averageResponseTime: number;
+      p95: number | null;
+      count: number;
+    }>;
+
+    if (days === 1) {
+      const latencyOverTimeRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END as time,
+             AVG(response_time) as averageResponseTime,
+             COUNT(*) as count
+           FROM request_analytics
+           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
+               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
+               ELSE '45'
+             END
+           ORDER BY time ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        time: string;
+        averageResponseTime: number;
+        count: number;
+      }>;
+
+      latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
+        time: intervalData.time,
+        averageResponseTime: intervalData.averageResponseTime,
+        p95: null, // Skip P95 for better performance
+        count: intervalData.count,
+      }));
+    } else if (days <= 7) {
+      const latencyOverTimeRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as time,
+             AVG(response_time) as averageResponseTime,
+             COUNT(*) as count
+           FROM request_analytics
+           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
+           ORDER BY time ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        time: string;
+        averageResponseTime: number;
+        count: number;
+      }>;
+
+      latencyOverTime = latencyOverTimeRaw.map((hourData) => ({
+        time: hourData.time,
+        averageResponseTime: hourData.averageResponseTime,
+        p95: null, // Skip P95 for better performance
+        count: hourData.count,
+      }));
+    } else {
+      const latencyOverTimeRaw = this.db
+        .query(
+          `
+           SELECT
+             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END as time,
+             AVG(response_time) as averageResponseTime,
+             COUNT(*) as count
+           FROM request_analytics
+           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
+           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
+             CASE
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
+               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
+               ELSE '20:00'
+             END
+           ORDER BY time ASC
+         `,
+        )
+        .all(cutoffTime) as Array<{
+        time: string;
+        averageResponseTime: number;
+        count: number;
+      }>;
+
+      latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
+        time: intervalData.time,
+        averageResponseTime: intervalData.averageResponseTime,
+        p95: null, // Skip P95 for better performance
+        count: intervalData.count,
+      }));
+    }
+
+    const result = {
+      requestsByDay: timeResults,
+      latencyOverTime: latencyOverTime,
+    };
+
+    // Cache the result
+    this.analyticsCache.set(cacheKey, {
+      data: result,
+      timestamp: now
+    });
+
+    return result;
+  }
+
+  /**
+   * Gets user agents data only (slowest loading)
+   * @param days Number of days to look back (default: 7)
+   * @returns User agents data
+   */
+  async getUserAgents(days: number = 7): Promise<Array<{ userAgent: string; count: number }>> {
+    // Check cache first
+    const cacheKey = `useragents_${days}`;
+    const cached = this.analyticsCache.get(cacheKey);
+    const now = Date.now();
+
+    if (cached && (now - cached.timestamp) < this.analyticsCacheTTL) {
+      return cached.data;
+    }
+
+    const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+
+    // Top user agents (raw strings, excluding stats) - optimized with index hint
+    const topUserAgents = this.db
+      .query(
+        `
+         SELECT user_agent as userAgent, COUNT(*) as count
+         FROM request_analytics INDEXED BY idx_request_analytics_user_agent
+         WHERE timestamp > ? AND user_agent IS NOT NULL AND endpoint != '/stats'
+         GROUP BY user_agent
+         ORDER BY count DESC
+         LIMIT 50
+       `,
+      )
+      .all(cutoffTime) as Array<{ userAgent: string; count: number }>;
+
+    // Cache the result
+    this.analyticsCache.set(cacheKey, {
+      data: topUserAgents,
+      timestamp: now
+    });
+
+    return topUserAgents;
   }
 }
 
