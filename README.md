@@ -6,7 +6,7 @@
 </h1>
 
 <p align="center">
-    <i><b>noun</b> - A mark or quality, as of distinction, individuality, or authenticity.</i>
+    <i>the slack emoji and profile cache serving the hackclub slack</i>
 </p>
 
 <p align="center">
@@ -66,11 +66,11 @@ http://cachet.dunkirk.sh {
 
 ### Usage
 
-The api is pretty simple. You can get a profile picture by calling `GET /profile/:id` where `:id` is the slack user id. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`. 
+The api is pretty simple. You can get a profile picture by calling `GET /profile/:id` where `:id` is the slack user id. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`.
 
 Additionally, you can manually purge a specific user's cache with `POST /users/:user/purge` (requires authentication with a bearer token).
 
-There are also complete swagger docs available at [`/swagger`](https://cachet.dunkirk.sh/swagger)! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^_^)
+There are also complete swagger docs available at [`/swagger`](https://cachet.dunkirk.sh/swagger)! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^\_^)
 
 ![Swagger Docs](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/swagger.webp)
 
@@ -109,8 +109,15 @@ const cache = new SlackCache(
   },
 );
 
-await cache.insertUser("U062UG485EE", "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg", null);
-await cache.insertEmoji("hackshark", "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png");
+await cache.insertUser(
+  "U062UG485EE",
+  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
+  null,
+);
+await cache.insertEmoji(
+  "hackshark",
+  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png",
+);
 
 const emoji = await cache.getEmoji("hackshark");
 const user = await cache.getUser("U062UG485EE");
@@ -123,18 +130,24 @@ console.log(`Cache purged: ${purgeResult}`); // true if user was in cache and pu
 The final bit was at this point a bit of a ridiculous one. I didn't like how heavyweight the `bolt` or `slack-edge` packages were so I rolled my own slack api wrapper. It's again fully typed and designed to be as lightweight as possible.
 
 ```typescript
-const slack = new Slack(process.env.SLACK_TOKEN, process.env.SLACK_SIGNING_SECRET);
+const slack = new Slack(
+  process.env.SLACK_TOKEN,
+  process.env.SLACK_SIGNING_SECRET,
+);
 
 const user = await slack.getUser("U062UG485EE");
 const emojis = await slack.getEmoji();
 
 // Manually purge a specific user's cache using the API endpoint
-const response = await fetch("https://cachet.example.com/users/U062UG485EE/purge", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.BEARER_TOKEN}`
-  }
-});
+const response = await fetch(
+  "https://cachet.example.com/users/U062UG485EE/purge",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
+    },
+  },
+);
 const result = await response.json();
 // { message: "User cache purged", userId: "U062UG485EE", success: true }
 ```
@@ -157,7 +170,7 @@ import { Migration } from "./types";
 export const myNewMigration: Migration = {
   version: "0.3.2", // Should match package.json version
   description: "What this migration does",
-  
+
   async up(db: Database): Promise<void> {
     // Migration code here
     db.run(`ALTER TABLE my_table ADD COLUMN new_column TEXT`);
