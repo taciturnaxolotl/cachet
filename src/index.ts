@@ -729,22 +729,8 @@ function setupCronJobs() {
     }
   }, 60 * 1000); // Check every minute
 
-  // Hourly purge of specific user cache
-  const hourlyUserPurge = setInterval(async () => {
-    const now = new Date();
-    if (now.getMinutes() === 5) {
-      const userId = "U062UG485EE";
-      console.log(`Purging cache for user ${userId}`);
-      const result = await cache.purgeUserCache(userId);
-      console.log(
-        `Cache purge for user ${userId}: ${result ? "successful" : "no cache entry found"}`,
-      );
-    }
-  }, 60 * 1000); // Check every minute
-
   // Clean up on process exit
   process.on("exit", () => {
     clearInterval(dailyPurge);
-    clearInterval(hourlyUserPurge);
   });
 }
