@@ -206,6 +206,63 @@ Remember to update the version in `package.json` when adding new migrations.
 
 Note: Migrations must be defined in both `index.ts` and `cache.ts` to avoid circular dependencies in the import structure.
 
+### Adding New Routes
+
+The app uses a type-safe route system that automatically generates Swagger documentation from route definitions. This ensures the API docs always stay in sync with the actual implementation.
+
+To add a new route, you need to:
+
+1. Create the handler function in `src/handlers/index.ts`:
+
+```typescript
+export const handleMyNewEndpoint: RouteHandlerWithAnalytics = async (
+  request,
+  recordAnalytics,
+) => {
+  // Your handler logic here
+  const data = { message: "Hello from new endpoint" };
+
+  await recordAnalytics(200);
+  return Response.json(data);
+};
+```
+
+2. Add the route definition in `src/routes/api-routes.ts`:
+
+```typescript
+"/my-new-endpoint": {
+  GET: createRoute(
+    withAnalytics("/my-new-endpoint", "GET", handlers.handleMyNewEndpoint),
+    {
+      summary: "My new endpoint",
+      description: "Does something useful",
+      tags: ["MyFeature"],
+      parameters: {
+        query: [
+          queryParam("limit", "number", "Number of items to return", false, 10)
+        ]
+      },
+      responses: Object.fromEntries([
+        apiResponse(200, "Success", {
+          type: "object",
+          properties: {
+            message: { type: "string", example: "Hello from new endpoint" }
+          }
+        })
+      ])
+    }
+  )
+}
+```
+
+The route will automatically:
+- Handle analytics recording (request timing, status codes, user agents)
+- Generate Swagger documentation with the provided metadata
+- Include proper TypeScript types for parameters and responses
+- Validate the route definition at compile time
+
+No need to manually update Swagger docs or add boilerplate analytics code. The system handles all of that automatically based on your route definitions.
+
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break.svg" />
 </p>
