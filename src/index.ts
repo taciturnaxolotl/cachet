@@ -611,8 +611,19 @@ async function handleGetEmoji(
   const emoji = await cache.getEmoji(emojiName);
 
   if (!emoji) {
-    await recordAnalytics(404);
-    return Response.json({ message: "Emoji not found" }, { status: 404 });
+    const fallbackUrl = getEmojiUrl(emojiName);
+    if (!fallbackUrl) {
+      await recordAnalytics(404);
+      return Response.json({ message: "Emoji not found" }, { status: 404 });
+    }
+
+    await recordAnalytics(200);
+    return Response.json({
+      id: null,
+      expiration: new Date().toISOString(),
+      name: emojiName,
+      image: fallbackUrl,
+    });
   }
 
   await recordAnalytics(200);
@@ -635,8 +646,17 @@ async function handleEmojiRedirect(
   const emoji = await cache.getEmoji(emojiName);
 
   if (!emoji) {
-    await recordAnalytics(404);
-    return Response.json({ message: "Emoji not found" }, { status: 404 });
+    const fallbackUrl = getEmojiUrl(emojiName);
+    if (!fallbackUrl) {
+      await recordAnalytics(404);
+      return Response.json({ message: "Emoji not found" }, { status: 404 });
+    }
+
+    await recordAnalytics(302);
+    return new Response(null, {
+      status: 302,
+      headers: { Location: fallbackUrl },
+    });
   }
 
   await recordAnalytics(302);
