@@ -1,21 +1,6 @@
-<h1 align="center">
-    <img src="https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/cachet.webp" width="200" alt="Logo"/><br/>
-    <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/transparent.png" height="45" width="0px"/>
-    Cachet
-    <img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/transparent.png" height="30" width="0px"/>
-</h1>
+# Cachet
 
-<p align="center">
-    <i>the slack emoji and profile cache serving the hackclub slack</i>
-</p>
-
-<p align="center">
-	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
-</p>
-
-<p align="center">
-	<img src="https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/out.gif" />
-</p>
+![screenshot of the dashboard](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/screenshot.jpeg)
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
