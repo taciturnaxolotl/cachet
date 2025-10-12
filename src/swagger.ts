@@ -1,4 +1,3 @@
-import { serve } from "bun";
 import { version } from "../package.json";
 
 // Define the Swagger specification
@@ -15,7 +14,7 @@ const swaggerSpec = {
     },
     license: {
       name: "AGPL 3.0",
-      url: "https://github.com/taciturnaxoltol/cachet/blob/master/LICENSE.md",
+      url: "https://github.com/taciturnaxolotl/cachet/blob/main/LICENSE.md",
     },
   },
   tags: [
