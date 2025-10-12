@@ -80,6 +80,9 @@ The app is honestly super simple. It's pretty much just a cache layer on top of 
 
 There were a few interesting hurdles that made this a bit more confusing though. The first was that slack returns the `emoji.list` endpoint with not just regular emojis but also aliased emojis. The aliased emojis doesn't seem that hard at first untill you realize that someone could alias stock slack emojis. That means that we don't have a url to the image and to make it worse slack doesn't have an offically documented way to get the full list of stock emojis. Thankfully an amazing user ([@impressiver](https://github.com/impressiver)) put this all into a handy [gist](https://gist.github.com/impressiver/87b5b9682d935efba8936898fbfe1919) for everyone to use! It was last updated on 2020-12-22 so it's a bit out of date but slack doesn't seem to be changing their emojis too often so it should be fine for now.
 
+> [!NOTE]
+> Turns out that to get the update emoji data all you need to do is open the react dev tools to the component tab and copy the consolidatedEmojis field. Just make sure this is done in a brand new workspace so there are no existing emojis that get lumped in.
+
 ```json
 {
     "ok": true,
