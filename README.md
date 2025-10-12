@@ -1,6 +1,6 @@
 # Cachet
 
-![screenshot of the dashboard](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/screenshot.jpeg)
+![screenshot of the analytics dashboard](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/screenshot.jpeg)
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
@@ -9,6 +9,8 @@
 ## What's this?
 
 Cachet is a cache / proxy for profile pictures and emojis on the hackclub slack! I made it because calling the slack api every time you want a profile image or emoji is expensive and annoying. Now you can just call the cachet api and get a link to the image or emoji you want! Best of all we are just linking to slack's cdn so it doesn't cost me much of anything (besides db space) to run!
+
+I also built an analytics dashboard that shows request patterns over time and latency graphs with logarithmic scaling (because some requests hit 1000ms+ and that was making the normal latency invisible). The dashboard loads progressively to avoid the analytics queries blocking the UI.
 
 ## How do I use it?
 
@@ -55,13 +57,17 @@ The api is pretty simple. You can get a profile picture by calling `GET /profile
 
 Additionally, you can manually purge a specific user's cache with `POST /users/:user/purge` (requires authentication with a bearer token).
 
-There are also complete swagger docs available at [`/swagger`](https://cachet.dunkirk.sh/swagger)! They are dynamically generated from the code so they should always be up to date! (The types force me to keep them up to date ^\_^)
+The analytics dashboard at `/` shows request counts and latency over time with configurable time ranges. I split the analytics into separate API endpoints (`/api/stats/essential`, `/api/stats/charts`, `/api/stats/useragents`) so the basic stats load immediately while the heavy chart queries run in the background.
+
+There are also complete swagger docs available at [`/swagger`](https://cachet.dunkirk.sh/swagger) with detailed endpoint specifications and examples for all API routes.
 
 ![Swagger Docs](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/swagger.webp)
 
 ## How does it work?
 
 The app is honestly super simple. It's pretty much just a cache layer on top of the slack api. When you request a profile picture or emoji it first checks the cache. If the image is in the cache it returns the link to the image. If the image is not in the cache it calls the slack api to get the link to image and then stores that in the cache before returning the image link to you!
+
+I had some performance issues where the latency would spike to 1000ms+ every few hours because of how I was handling cache expiration. Users would get purged daily and emojis would expire randomly causing bulk API fetches during peak traffic. I fixed this by switching to a "touch-to-refresh" pattern where active users get their TTL extended when accessed but queued for background updates. Now emoji updates happen at 3 AM and user cache cleanup is probabilistic during off-peak hours.
 
 There were a few interesting hurdles that made this a bit more confusing though. The first was that slack returns the `emoji.list` endpoint with not just regular emojis but also aliased emojis. The aliased emojis doesn't seem that hard at first untill you realize that someone could alias stock slack emojis. That means that we don't have a url to the image and to make it worse slack doesn't have an offically documented way to get the full list of stock emojis. Thankfully an amazing user ([@impressiver](https://github.com/impressiver)) put this all into a handy [gist](https://gist.github.com/impressiver/87b5b9682d935efba8936898fbfe1919) for everyone to use! It was last updated on 2020-12-22 so it's a bit out of date but slack doesn't seem to be changing their emojis too often so it should be fine for now.
 
@@ -85,34 +91,47 @@ There were a few interesting hurdles that made this a bit more confusing though.
 
 The second challenge (technically its not a challenge; more of a side project) was building a custom cache solution based on `Bun:sqlite`. It ended up being far easier than I thought it was going to be and I'm quite happy with how it turned out! It's fully typed which makes it awesome to use and blazing fast due to the native Bun implementation of sqlite. Using it is also dead simple. Just create a new instance of the cache with a db path, a ttl, and a fetch function for the emojis and you're good to go! Inserting and getting data is also super simple and the cache is fully typed!
 
+I also added analytics tracking that stores every request with timestamps, response times, endpoints, and user agents. The database was getting pretty big (1.26M records) so I had to optimize the analytics queries and add data retention (30 days). The analytics dashboard splits the queries into separate endpoints so you get the basic stats immediately while the chart data loads in the background.
+
 ```typescript
 const cache = new SlackCache(
   process.env.DATABASE_PATH ?? "./data/cachet.db",
   24,
   async () => {
-    console.log("Fetching emojis from Slack");
+    console.log("Scheduled emoji refresh starting");
   },
 );
 
+// Set up background processing for user updates
+cache.setSlackWrapper(slackWrapper);
+
 await cache.insertUser(
   "U062UG485EE",
-  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
-  null,
+  "Kieran Klukas",
+  "he/him",
+  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg"
 );
+
 await cache.insertEmoji(
   "hackshark",
-  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png",
+  null,
+  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png"
 );
 
 const emoji = await cache.getEmoji("hackshark");
-const user = await cache.getUser("U062UG485EE");
+const user = await cache.getUser("U062UG485EE"); // Automatically extends TTL and queues background refresh if stale
 
-// You can also purge the cache for a specific user
+// Manual cache management
 const purgeResult = await cache.purgeUserCache("U062UG485EE");
-console.log(`Cache purged: ${purgeResult}`); // true if user was in cache and purged
+const healthStatus = await cache.healthCheck();
+
+// Analytics data access
+const stats = await cache.getEssentialStats(7);
+const chartData = await cache.getChartData(7);
+const userAgents = await cache.getUserAgents(7);
 ```
 
-The final bit was at this point a bit of a ridiculous one. I didn't like how heavyweight the `bolt` or `slack-edge` packages were so I rolled my own slack api wrapper. It's again fully typed and designed to be as lightweight as possible.
+The final bit was at this point a bit of a ridiculous one. I didn't like how heavyweight the `bolt` or `slack-edge` packages were so I rolled my own slack api wrapper. It's again fully typed and designed to be as lightweight as possible. The background user update queue processes up to 3 users every 30 seconds to respect Slack's rate limits.
 
 ```typescript
 const slack = new Slack(
