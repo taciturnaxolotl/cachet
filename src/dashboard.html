@@ -676,13 +676,33 @@
           }
         });
 
+        // Calculate dynamic max for logarithmic scale
+        const responseTimes = data.map((d) => d.averageResponseTime);
+        const maxResponseTime = Math.max(...responseTimes);
+
+        // Calculate appropriate max for log scale (next power of 10)
+        const logMax = Math.pow(10, Math.ceil(Math.log10(maxResponseTime)));
+
+        // Generate dynamic tick values based on the data range
+        const generateLogTicks = (min, max) => {
+          const ticks = [];
+          let current = 1;
+          while (current <= max) {
+            ticks.push(current);
+            current *= 10;
+          }
+          return ticks;
+        };
+
+        const dynamicTicks = generateLogTicks(1, logMax);
+
         charts.latency = new Chart(ctx, {
           type: "line",
           data: {
             labels: labels,
             datasets: [{
               label: "Average Response Time",
-              data: data.map((d) => d.averageResponseTime),
+              data: responseTimes,
               borderColor: "#10b981",
               backgroundColor: "rgba(16, 185, 129, 0.1)",
               tension: 0.4,
@@ -732,11 +752,12 @@
                 type: 'logarithmic',
                 title: { display: true, text: 'Response Time (ms, log scale)' },
                 min: 1,
+                max: logMax,
                 grid: { color: 'rgba(0, 0, 0, 0.05)' },
                 ticks: {
                   callback: function(value) {
-                    // Show clean numbers: 1, 10, 100, 1000, etc.
-                    if (value === 1 || value === 10 || value === 100 || value === 1000 || value === 10000) {
+                    // Show clean numbers based on dynamic range
+                    if (dynamicTicks.includes(value)) {
                       return value + 'ms';
                     }
                     return '';
