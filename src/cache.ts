@@ -618,6 +618,25 @@ class Cache {
   }
 
   /**
+   * Get all emojis from the cache
+   * @returns Array of all non-expired emojis
+   */
+  async getAllEmojis(): Promise<Emoji[]> {
+    const results = this.db
+      .query("SELECT * FROM emojis WHERE expiration > ?")
+      .all(Date.now()) as Emoji[];
+
+    return results.map(result => ({
+      type: "emoji",
+      id: result.id,
+      name: result.name,
+      alias: result.alias || null,
+      imageUrl: result.imageUrl,
+      expiration: new Date(result.expiration),
+    }));
+  }
+
+  /**
    * Records a request for analytics
    * @param endpoint The endpoint that was accessed
    * @param method HTTP method
@@ -1564,8 +1583,11 @@ class Cache {
 
     // Clean up old cache entries (keep only last 5)
     if (this.analyticsCache.size > 5) {
-      const oldestKey = Array.from(this.analyticsCache.keys())[0];
-      this.analyticsCache.delete(oldestKey);
+      const keys = Array.from(this.analyticsCache.keys());
+      const oldestKey = keys[0];
+      if (oldestKey) {
+        this.analyticsCache.delete(oldestKey);
+      }
     }
 
     return result;

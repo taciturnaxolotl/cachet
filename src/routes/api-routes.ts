@@ -1,0 +1,310 @@
+/**
+ * Complete typed route definitions for all Cachet API endpoints
+ */
+
+import {
+  createRoute,
+  pathParam,
+  queryParam,
+  apiResponse,
+  type RouteDefinition
+} from "../types/routes";
+import { createAnalyticsWrapper } from "../lib/analytics-wrapper";
+import * as handlers from "../handlers";
+
+// Factory function to create all routes with injected dependencies
+export function createApiRoutes(cache: any, slackApp: any) {
+  // Inject dependencies into handlers
+  handlers.injectDependencies(cache, slackApp);
+
+  const withAnalytics = createAnalyticsWrapper(cache);
+
+  return {
+    "/health": {
+      GET: createRoute(
+        withAnalytics("/health", "GET", handlers.handleHealthCheck),
+        {
+          summary: "Health check",
+          description: "Check if the service is healthy and operational",
+          tags: ["Health"],
+          responses: Object.fromEntries([
+            apiResponse(200, "Service is healthy", {
+              type: "object",
+              properties: {
+                status: { type: "string", example: "healthy" },
+                cache: { type: "boolean", example: true },
+                uptime: { type: "number", example: 123456 }
+              }
+            }),
+            apiResponse(503, "Service is unhealthy")
+          ])
+        }
+      )
+    },
+
+    "/users/:id": {
+      GET: createRoute(
+        withAnalytics("/users/:id", "GET", handlers.handleGetUser),
+        {
+          summary: "Get user information",
+          description: "Retrieve cached user profile information from Slack",
+          tags: ["Users"],
+          parameters: {
+            path: [pathParam("id", "string", "Slack user ID", "U062UG485EE")]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "User information retrieved successfully", {
+              type: "object",
+              properties: {
+                id: { type: "string", example: "U062UG485EE" },
+                userId: { type: "string", example: "U062UG485EE" },
+                displayName: { type: "string", example: "Kieran Klukas" },
+                pronouns: { type: "string", example: "he/him" },
+                imageUrl: { type: "string", example: "https://avatars.slack-edge.com/..." }
+              }
+            }),
+            apiResponse(404, "User not found")
+          ])
+        }
+      )
+    },
+
+    "/users/:id/r": {
+      GET: createRoute(
+        withAnalytics("/users/:id/r", "GET", handlers.handleUserRedirect),
+        {
+          summary: "Redirect to user profile image",
+          description: "Direct redirect to the user's cached profile image URL",
+          tags: ["Users"],
+          parameters: {
+            path: [pathParam("id", "string", "Slack user ID", "U062UG485EE")]
+          },
+          responses: Object.fromEntries([
+            apiResponse(302, "Redirect to user image"),
+            apiResponse(307, "Temporary redirect to default avatar"),
+            apiResponse(404, "User not found")
+          ])
+        }
+      )
+    },
+
+    "/users/:id/purge": {
+      POST: createRoute(
+        withAnalytics("/users/:id/purge", "POST", handlers.handlePurgeUser),
+        {
+          summary: "Purge user cache",
+          description: "Remove a specific user from the cache (requires authentication)",
+          tags: ["Users", "Admin"],
+          requiresAuth: true,
+          parameters: {
+            path: [pathParam("id", "string", "Slack user ID to purge", "U062UG485EE")]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "User cache purged successfully", {
+              type: "object",
+              properties: {
+                message: { type: "string", example: "User cache purged" },
+                userId: { type: "string", example: "U062UG485EE" },
+                success: { type: "boolean", example: true }
+              }
+            }),
+            apiResponse(401, "Unauthorized")
+          ])
+        }
+      )
+    },
+
+    "/emojis": {
+      GET: createRoute(
+        withAnalytics("/emojis", "GET", handlers.handleListEmojis),
+        {
+          summary: "List all emojis",
+          description: "Get a list of all cached custom emojis from the Slack workspace",
+          tags: ["Emojis"],
+          responses: Object.fromEntries([
+            apiResponse(200, "List of emojis retrieved successfully", {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "hackshark" },
+                  imageUrl: { type: "string", example: "https://emoji.slack-edge.com/..." },
+                  alias: { type: "string", nullable: true, example: null }
+                }
+              }
+            })
+          ])
+        }
+      )
+    },
+
+    "/emojis/:name": {
+      GET: createRoute(
+        withAnalytics("/emojis/:name", "GET", handlers.handleGetEmoji),
+        {
+          summary: "Get emoji information",
+          description: "Retrieve information about a specific custom emoji",
+          tags: ["Emojis"],
+          parameters: {
+            path: [pathParam("name", "string", "Emoji name (without colons)", "hackshark")]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "Emoji information retrieved successfully", {
+              type: "object",
+              properties: {
+                name: { type: "string", example: "hackshark" },
+                imageUrl: { type: "string", example: "https://emoji.slack-edge.com/..." },
+                alias: { type: "string", nullable: true, example: null }
+              }
+            }),
+            apiResponse(404, "Emoji not found")
+          ])
+        }
+      )
+    },
+
+    "/emojis/:name/r": {
+      GET: createRoute(
+        withAnalytics("/emojis/:name/r", "GET", handlers.handleEmojiRedirect),
+        {
+          summary: "Redirect to emoji image",
+          description: "Direct redirect to the emoji's cached image URL",
+          tags: ["Emojis"],
+          parameters: {
+            path: [pathParam("name", "string", "Emoji name (without colons)", "hackshark")]
+          },
+          responses: Object.fromEntries([
+            apiResponse(302, "Redirect to emoji image"),
+            apiResponse(404, "Emoji not found")
+          ])
+        }
+      )
+    },
+
+    "/reset": {
+      POST: createRoute(
+        withAnalytics("/reset", "POST", handlers.handleResetCache),
+        {
+          summary: "Reset entire cache",
+          description: "Clear all cached data (requires authentication)",
+          tags: ["Admin"],
+          requiresAuth: true,
+          responses: Object.fromEntries([
+            apiResponse(200, "Cache reset successfully", {
+              type: "object",
+              properties: {
+                message: { type: "string", example: "Cache has been reset" },
+                users: { type: "number", example: 42 },
+                emojis: { type: "number", example: 1337 }
+              }
+            }),
+            apiResponse(401, "Unauthorized")
+          ])
+        }
+      )
+    },
+
+    "/api/stats/essential": {
+      GET: createRoute(
+        withAnalytics("/api/stats/essential", "GET", handlers.handleGetEssentialStats),
+        {
+          summary: "Get essential analytics",
+          description: "Fast-loading essential statistics for the dashboard",
+          tags: ["Analytics"],
+          parameters: {
+            query: [queryParam("days", "number", "Number of days to analyze", false, 7)]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "Essential stats retrieved successfully", {
+              type: "object",
+              properties: {
+                totalRequests: { type: "number", example: 12345 },
+                averageResponseTime: { type: "number", example: 23.5 },
+                uptime: { type: "number", example: 99.9 },
+                period: { type: "string", example: "7 days" }
+              }
+            })
+          ])
+        }
+      )
+    },
+
+    "/api/stats/charts": {
+      GET: createRoute(
+        withAnalytics("/api/stats/charts", "GET", handlers.handleGetChartData),
+        {
+          summary: "Get chart data",
+          description: "Time-series data for request and latency charts",
+          tags: ["Analytics"],
+          parameters: {
+            query: [queryParam("days", "number", "Number of days to analyze", false, 7)]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "Chart data retrieved successfully", {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  time: { type: "string", example: "2024-01-01T12:00:00Z" },
+                  count: { type: "number", example: 42 },
+                  averageResponseTime: { type: "number", example: 25.3 }
+                }
+              }
+            })
+          ])
+        }
+      )
+    },
+
+    "/api/stats/useragents": {
+      GET: createRoute(
+        withAnalytics("/api/stats/useragents", "GET", handlers.handleGetUserAgents),
+        {
+          summary: "Get user agents statistics",
+          description: "List of user agents accessing the service with request counts",
+          tags: ["Analytics"],
+          parameters: {
+            query: [queryParam("days", "number", "Number of days to analyze", false, 7)]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "User agents data retrieved successfully", {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  userAgent: { type: "string", example: "Mozilla/5.0..." },
+                  count: { type: "number", example: 123 }
+                }
+              }
+            })
+          ])
+        }
+      )
+    },
+
+    "/stats": {
+      GET: createRoute(
+        withAnalytics("/stats", "GET", handlers.handleGetStats),
+        {
+          summary: "Get complete analytics (legacy)",
+          description: "Legacy endpoint returning all analytics data in one response",
+          tags: ["Analytics", "Legacy"],
+          parameters: {
+            query: [queryParam("days", "number", "Number of days to analyze", false, 7)]
+          },
+          responses: Object.fromEntries([
+            apiResponse(200, "Complete analytics data retrieved", {
+              type: "object",
+              properties: {
+                totalRequests: { type: "number" },
+                averageResponseTime: { type: "number" },
+                chartData: { type: "array" },
+                userAgents: { type: "array" }
+              }
+            })
+          ])
+        }
+      )
+    }
+  };
+}
