@@ -46,6 +46,8 @@ class Cache {
   private db: Database;
   private defaultExpiration: number; // in hours
   private onEmojiExpired?: () => void;
+  private analyticsCache: Map<string, { data: any; timestamp: number }> = new Map();
+  private analyticsCacheTTL = 60000; // 1 minute cache for analytics
 
   /**
    * Creates a new Cache instance
@@ -121,6 +123,27 @@ class Cache {
       CREATE INDEX IF NOT EXISTS idx_request_analytics_endpoint
       ON request_analytics(endpoint)
     `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_status_timestamp
+      ON request_analytics(status_code, timestamp)
+    `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_response_time
+      ON request_analytics(response_time) WHERE response_time IS NOT NULL
+    `);
+
+    this.db.run(`
+      CREATE INDEX IF NOT EXISTS idx_request_analytics_composite
+      ON request_analytics(timestamp, endpoint, status_code)
+    `);
+
+    // Enable WAL mode for better concurrent performance
+    this.db.run('PRAGMA journal_mode = WAL');
+    this.db.run('PRAGMA synchronous = NORMAL');
+    this.db.run('PRAGMA cache_size = 10000');
+    this.db.run('PRAGMA temp_store = memory');
 
     // check if there are any emojis in the db
     if (this.onEmojiExpired) {
@@ -488,7 +511,7 @@ class Cache {
   }
 
   /**
-   * Gets request analytics statistics
+   * Gets request analytics statistics with performance optimizations
    * @param days Number of days to look back (default: 7)
    * @returns Analytics data
    */
@@ -559,6 +582,14 @@ class Cache {
       total: number;
     }>;
   }> {
+    // Check cache first
+    const cacheKey = `analytics_${days}`;
+    const cached = this.analyticsCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (cached && (now - cached.timestamp) < this.analyticsCacheTTL) {
+      return cached.data;
+    }
     const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
 
     // Total requests (excluding stats endpoint)
@@ -1329,7 +1360,7 @@ class Cache {
         .sort((a, b) => a.time.localeCompare(b.time));
     }
 
-    return {
+    const result = {
       totalRequests: totalResult.count,
       requestsByEndpoint: requestsByEndpoint,
       requestsByStatus: statusResults,
@@ -1361,6 +1392,20 @@ class Cache {
       },
       trafficOverview,
     };
+
+    // Cache the result
+    this.analyticsCache.set(cacheKey, {
+      data: result,
+      timestamp: now
+    });
+
+    // Clean up old cache entries (keep only last 5)
+    if (this.analyticsCache.size > 5) {
+      const oldestKey = Array.from(this.analyticsCache.keys())[0];
+      this.analyticsCache.delete(oldestKey);
+    }
+
+    return result;
   }
 }
 
