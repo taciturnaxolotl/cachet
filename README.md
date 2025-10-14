@@ -46,7 +46,7 @@ Now grab a free port from nest (`nest get_port`) and then link your domain to yo
 
 ```caddy
 http://<your desired domain or subdomain> {
-        bind unix/.cachet.dunkirk.sh.webserver.sock|777
+        bind unix/.<your desired domain or subdomain>.webserver.sock|777
         reverse_proxy :38453
 }
 ```
