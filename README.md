@@ -42,10 +42,10 @@ systemctl --user enable cachet
 systemctl --user start cachet
 ```
 
-Now grab a free port from nest (`nest get_port`) and then link your domain to your nest user (`nest caddy add cachet.dunkirk.sh`) (don't for get to make a CNAME on the domain pointing to `kierank.hackclub.app`) and then after editing in a `Caddyfile` entry like the following you should be good to go! (Don't forget to restart caddy: `systemctl restart --user caddy`)
+Now grab a free port from nest (`nest get_port`) and then link your domain to your nest user (`nest caddy add <your desired domain or subdomain>`) (don't for get to make a CNAME on the domain pointing to `<your nest username>.hackclub.app`) and then after editing in a `Caddyfile` entry like the following you should be good to go! (Don't forget to restart caddy: `systemctl restart --user caddy`)
 
 ```caddy
-http://cachet.dunkirk.sh {
+http://<your desired domain or subdomain> {
         bind unix/.cachet.dunkirk.sh.webserver.sock|777
         reverse_proxy :38453
 }
