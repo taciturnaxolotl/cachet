@@ -1,0 +1,13 @@
+{
+	"$schema": "https://charm.land/crush.json",
+	"lsp": {
+		"biome": {
+			"command": "bunx",
+			"args": ["biome", "lsp-proxy"]
+		},
+		"typescript": {
+			"command": "bunx",
+			"args": ["typescript-language-server", "--stdio"]
+		}
+	}
+}
