@@ -405,10 +405,10 @@
     </div>
 
     <script>
-      let charts = {};
+      const charts = {};
       let autoRefreshInterval;
-      let currentData = null;
-      let isLoading = false;
+      const _currentData = null;
+      let _isLoading = false;
       let currentRequestId = 0;
       let abortController = null;
 
@@ -438,7 +438,7 @@
         const requestId = ++currentRequestId;
         const signal = abortController.signal;
 
-        isLoading = true;
+        _isLoading = true;
         const startTime = Date.now();
 
         // Capture the days value at the start to ensure consistency
@@ -505,7 +505,7 @@
             return;
           }
 
-          updateCharts(chartData, parseInt(days));
+          updateCharts(chartData, parseInt(days, 10));
           refreshBtn.textContent = "Loading User Agents...";
 
           console.log(`[${requestId}] Charts loaded in ${Date.now() - startTime}ms`);
@@ -547,7 +547,7 @@
         } finally {
           // Only update UI if this is still the current request
           if (requestId === currentRequestId) {
-            isLoading = false;
+            _isLoading = false;
             refreshBtn.disabled = false;
             refreshBtn.textContent = "Refresh";
             abortController = null;
@@ -558,9 +558,9 @@
       // Update just the essential stats (fast)
       function updateEssentialStats(data) {
         document.getElementById("totalRequests").textContent = data.totalRequests.toLocaleString();
-        document.getElementById("uptime").textContent = data.uptime.toFixed(1) + "%";
+        document.getElementById("uptime").textContent = `${data.uptime.toFixed(1)}%`;
         document.getElementById("avgResponseTime").textContent =
-          data.averageResponseTime ? Math.round(data.averageResponseTime) + "ms" : "N/A";
+          data.averageResponseTime ? `${Math.round(data.averageResponseTime)}ms` : "N/A";
       }
 
       // Update charts (medium speed)
@@ -571,9 +571,9 @@
 
 
       // Requests Over Time Chart
-      function updateRequestsChart(data, isHourly) {
+      function updateRequestsChart(data, _isHourly) {
         const ctx = document.getElementById("requestsChart").getContext("2d");
-        const days = parseInt(document.getElementById("daysSelect").value);
+        const days = parseInt(document.getElementById("daysSelect").value, 10);
 
         if (charts.requests) charts.requests.destroy();
 
@@ -617,15 +617,13 @@
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  title: function(context) {
+                  title: (context) => {
                     const original = data[context[0].dataIndex];
                     if (days === 1) return `Time: ${original.date}`;
                     if (days <= 7) return `DateTime: ${original.date}`;
                     return `Interval: ${original.date}`;
                   },
-                  label: function(context) {
-                    return `Requests: ${context.parsed.y.toLocaleString()}`;
-                  }
+                  label: (context) => `Requests: ${context.parsed.y.toLocaleString()}`
                 }
               }
             },
@@ -653,9 +651,9 @@
       }
 
       // Latency Over Time Chart
-      function updateLatencyChart(data, isHourly) {
+      function updateLatencyChart(data, _isHourly) {
         const ctx = document.getElementById("latencyChart").getContext("2d");
-        const days = parseInt(document.getElementById("daysSelect").value);
+        const days = parseInt(document.getElementById("daysSelect").value, 10);
 
         if (charts.latency) charts.latency.destroy();
 
@@ -681,10 +679,10 @@
         const maxResponseTime = Math.max(...responseTimes);
 
         // Calculate appropriate max for log scale (next power of 10)
-        const logMax = Math.pow(10, Math.ceil(Math.log10(maxResponseTime)));
+        const logMax = 10 ** Math.ceil(Math.log10(maxResponseTime));
 
         // Generate dynamic tick values based on the data range
-        const generateLogTicks = (min, max) => {
+        const generateLogTicks = (_min, max) => {
           const ticks = [];
           let current = 1;
           while (current <= max) {
@@ -719,13 +717,13 @@
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  title: function(context) {
+                  title: (context) => {
                     const original = data[context[0].dataIndex];
                     if (days === 1) return `Time: ${original.time}`;
                     if (days <= 7) return `DateTime: ${original.time}`;
                     return `Interval: ${original.time}`;
                   },
-                  label: function(context) {
+                  label: (context) => {
                     const point = data[context.dataIndex];
                     return [
                       `Response Time: ${Math.round(context.parsed.y)}ms`,
@@ -755,10 +753,10 @@
                 max: logMax,
                 grid: { color: 'rgba(0, 0, 0, 0.05)' },
                 ticks: {
-                  callback: function(value) {
+                  callback: (value) => {
                     // Show clean numbers based on dynamic range
                     if (dynamicTicks.includes(value)) {
-                      return value + 'ms';
+                      return `${value}ms`;
                     }
                     return '';
                   }
@@ -902,7 +900,7 @@
       document.addEventListener('DOMContentLoaded', loadData);
 
       // Cleanup on page unload
-      window.addEventListener('beforeunload', function() {
+      window.addEventListener('beforeunload', () => {
         clearInterval(autoRefreshInterval);
         Object.values(charts).forEach(chart => {
           if (chart && typeof chart.destroy === 'function') {

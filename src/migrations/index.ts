@@ -4,9 +4,9 @@ import { Migration } from "./types";
 
 // Export all migrations
 export const migrations = [
-  endpointGroupingMigration,
-  logGroupingMigration,
-  // Add new migrations here
+	endpointGroupingMigration,
+	logGroupingMigration,
+	// Add new migrations here
 ];
 
 // Export the migration types

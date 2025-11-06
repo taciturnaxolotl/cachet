@@ -1,26 +1,26 @@
 {
-  "name": "cachet",
-  "version": "0.3.2",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
-    "build": "bun build --target=bun --production --outdir=dist ./src/index.ts"
-  },
-  "dependencies": {
-    "@sentry/bun": "^9.40.0",
-    "@tqman/nice-logger": "^1.0.7",
-    "@types/node-cron": "^3.0.11",
-    "bottleneck": "^2.19.5",
-    "elysia": "1.1.26",
-    "node-cron": "^3.0.3",
-    "sentry": "^0.1.2"
-  },
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
-  "private": true,
-  "peerDependencies": {
-    "typescript": "^5"
-  }
+	"name": "cachet",
+	"version": "0.3.2",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"dev": "bun run --watch src/index.ts",
+		"start": "bun run src/index.ts",
+		"build": "bun build --target=bun --production --outdir=dist ./src/index.ts"
+	},
+	"dependencies": {
+		"@sentry/bun": "^9.40.0",
+		"@tqman/nice-logger": "^1.0.7",
+		"@types/node-cron": "^3.0.11",
+		"bottleneck": "^2.19.5",
+		"elysia": "1.1.26",
+		"node-cron": "^3.0.3",
+		"sentry": "^0.1.2"
+	},
+	"devDependencies": {
+		"@types/bun": "latest"
+	},
+	"private": true,
+	"peerDependencies": {
+		"typescript": "^5"
+	}
 }
