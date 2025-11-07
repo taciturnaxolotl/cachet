@@ -13,6 +13,266 @@ interface SlackUserProvider {
 }
 
 /**
+ * Analytics data type definitions
+ */
+interface EndpointMetrics {
+	endpoint: string;
+	count: number;
+	averageResponseTime: number;
+}
+
+interface StatusMetrics {
+	status: number;
+	count: number;
+	averageResponseTime: number;
+}
+
+interface DayMetrics {
+	date: string;
+	count: number;
+	averageResponseTime: number;
+}
+
+interface UserAgentMetrics {
+	userAgent: string;
+	count: number;
+}
+
+interface LatencyPercentiles {
+	p50: number | null;
+	p75: number | null;
+	p90: number | null;
+	p95: number | null;
+	p99: number | null;
+}
+
+interface LatencyDistribution {
+	range: string;
+	count: number;
+	percentage: number;
+}
+
+interface LatencyOverTimeMetrics {
+	time: string;
+	averageResponseTime: number;
+	p95: number | null;
+	count: number;
+}
+
+interface LatencyAnalytics {
+	percentiles: LatencyPercentiles;
+	distribution: Array<LatencyDistribution>;
+	slowestEndpoints: Array<EndpointMetrics>;
+	latencyOverTime: Array<LatencyOverTimeMetrics>;
+}
+
+interface PerformanceMetrics {
+	uptime: number;
+	errorRate: number;
+	throughput: number;
+	apdex: number;
+	cacheHitRate: number;
+}
+
+interface PeakTraffic {
+	peakHour: string;
+	peakRequests: number;
+	peakDay: string;
+	peakDayRequests: number;
+}
+
+interface DashboardMetrics {
+	statsRequests: number;
+	totalWithStats: number;
+}
+
+interface TrafficOverview {
+	time: string;
+	routes: Record<string, number>;
+	total: number;
+}
+
+/**
+ * Analytics method return types
+ */
+interface FullAnalyticsData {
+	totalRequests: number;
+	requestsByEndpoint: Array<EndpointMetrics>;
+	requestsByStatus: Array<StatusMetrics>;
+	requestsByDay: Array<DayMetrics>;
+	averageResponseTime: number | null;
+	topUserAgents: Array<UserAgentMetrics>;
+	latencyAnalytics: LatencyAnalytics;
+	performanceMetrics: PerformanceMetrics;
+	peakTraffic: PeakTraffic;
+	dashboardMetrics: DashboardMetrics;
+	trafficOverview: Array<TrafficOverview>;
+}
+
+interface EssentialStatsData {
+	totalRequests: number;
+	averageResponseTime: number | null;
+	uptime: number;
+}
+
+interface ChartData {
+	requestsByDay: Array<DayMetrics>;
+	latencyOverTime: Array<LatencyOverTimeMetrics>;
+}
+
+type UserAgentData = Array<UserAgentMetrics>;
+
+/**
+ * Discriminated union for all analytics cache data types
+ */
+type AnalyticsCacheData = 
+	| { type: 'analytics'; data: FullAnalyticsData }
+	| { type: 'essential'; data: EssentialStatsData }
+	| { type: 'charts'; data: ChartData }
+	| { type: 'useragents'; data: UserAgentData };
+
+/**
+ * Type-safe analytics cache entry
+ */
+interface AnalyticsCacheEntry {
+	data: AnalyticsCacheData;
+	timestamp: number;
+}
+
+/**
+ * Type guard functions for cache data
+ */
+function isAnalyticsData(data: AnalyticsCacheData): data is { type: 'analytics'; data: FullAnalyticsData } {
+	return data.type === 'analytics';
+}
+
+function isEssentialStatsData(data: AnalyticsCacheData): data is { type: 'essential'; data: EssentialStatsData } {
+	return data.type === 'essential';
+}
+
+function isChartData(data: AnalyticsCacheData): data is { type: 'charts'; data: ChartData } {
+	return data.type === 'charts';
+}
+
+function isUserAgentData(data: AnalyticsCacheData): data is { type: 'useragents'; data: UserAgentData } {
+	return data.type === 'useragents';
+}
+
+/**
+ * Type-safe cache helper methods
+ */
+class AnalyticsCache {
+	private cache: Map<string, AnalyticsCacheEntry>;
+	private cacheTTL: number;
+	private maxCacheSize: number;
+
+	constructor(cacheTTL: number = 30000, maxCacheSize: number = 10) {
+		this.cache = new Map();
+		this.cacheTTL = cacheTTL;
+		this.maxCacheSize = maxCacheSize;
+	}
+
+	/**
+	 * Get cached analytics data with type safety
+	 */
+	getAnalyticsData(key: string): FullAnalyticsData | null {
+		const cached = this.cache.get(key);
+		const now = Date.now();
+		
+		if (cached && now - cached.timestamp < this.cacheTTL && isAnalyticsData(cached.data)) {
+			return cached.data.data;
+		}
+		return null;
+	}
+
+	/**
+	 * Get cached essential stats data with type safety
+	 */
+	getEssentialStatsData(key: string): EssentialStatsData | null {
+		const cached = this.cache.get(key);
+		const now = Date.now();
+		
+		if (cached && now - cached.timestamp < this.cacheTTL && isEssentialStatsData(cached.data)) {
+			return cached.data.data;
+		}
+		return null;
+	}
+
+	/**
+	 * Get cached chart data with type safety
+	 */
+	getChartData(key: string): ChartData | null {
+		const cached = this.cache.get(key);
+		const now = Date.now();
+		
+		if (cached && now - cached.timestamp < this.cacheTTL && isChartData(cached.data)) {
+			return cached.data.data;
+		}
+		return null;
+	}
+
+	/**
+	 * Get cached user agent data with type safety
+	 */
+	getUserAgentData(key: string): UserAgentData | null {
+		const cached = this.cache.get(key);
+		const now = Date.now();
+		
+		if (cached && now - cached.timestamp < this.cacheTTL && isUserAgentData(cached.data)) {
+			return cached.data.data;
+		}
+		return null;
+	}
+
+	/**
+	 * Set analytics data in cache with type safety
+	 */
+	setAnalyticsData(key: string, data: FullAnalyticsData): void {
+		this.setCacheEntry(key, { type: 'analytics', data });
+	}
+
+	/**
+	 * Set essential stats data in cache with type safety
+	 */
+	setEssentialStatsData(key: string, data: EssentialStatsData): void {
+		this.setCacheEntry(key, { type: 'essential', data });
+	}
+
+	/**
+	 * Set chart data in cache with type safety
+	 */
+	setChartData(key: string, data: ChartData): void {
+		this.setCacheEntry(key, { type: 'charts', data });
+	}
+
+	/**
+	 * Set user agent data in cache with type safety
+	 */
+	setUserAgentData(key: string, data: UserAgentData): void {
+		this.setCacheEntry(key, { type: 'useragents', data });
+	}
+
+	/**
+	 * Internal method to set cache entry and manage cache size
+	 */
+	private setCacheEntry(key: string, data: AnalyticsCacheData): void {
+		this.cache.set(key, {
+			data,
+			timestamp: Date.now(),
+		});
+
+		// Clean up old cache entries
+		if (this.cache.size > this.maxCacheSize) {
+			const keys = Array.from(this.cache.keys());
+			const oldestKey = keys[0];
+			if (oldestKey) {
+				this.cache.delete(oldestKey);
+			}
+		}
+	}
+}
+
+/**
  * @fileoverview This file contains the Cache class for storing user and emoji data with automatic expiration. To use the module in your project, import the default export and create a new instance of the Cache class. The class provides methods for inserting and retrieving user and emoji data from the cache. The cache automatically purges expired items every hour.
  * @module cache
  * @requires bun:sqlite
@@ -54,80 +314,7 @@ class Cache {
 	private db: Database;
 	private defaultExpiration: number; // in hours
 	private onEmojiExpired?: () => void;
-	private analyticsCache: Map<
-		string,
-		{
-			data: {
-				totalRequests: number;
-				requestsByEndpoint: Array<{
-					endpoint: string;
-					count: number;
-					averageResponseTime: number;
-				}>;
-				requestsByStatus: Array<{
-					status: number;
-					count: number;
-					averageResponseTime: number;
-				}>;
-				requestsByDay: Array<{
-					date: string;
-					count: number;
-					averageResponseTime: number;
-				}>;
-				averageResponseTime: number | null;
-				topUserAgents: Array<{ userAgent: string; count: number }>;
-				latencyAnalytics: {
-					percentiles: {
-						p50: number | null;
-						p75: number | null;
-						p90: number | null;
-						p95: number | null;
-						p99: number | null;
-					};
-					distribution: Array<{
-						range: string;
-						count: number;
-						percentage: number;
-					}>;
-					slowestEndpoints: Array<{
-						endpoint: string;
-						averageResponseTime: number;
-						count: number;
-					}>;
-					latencyOverTime: Array<{
-						time: string;
-						averageResponseTime: number;
-						p95: number | null;
-						count: number;
-					}>;
-				};
-				performanceMetrics: {
-					uptime: number;
-					errorRate: number;
-					throughput: number;
-					apdex: number;
-					cachehitRate: number;
-				};
-				peakTraffic: {
-					peakHour: string;
-					peakRequests: number;
-					peakDay: string;
-					peakDayRequests: number;
-				};
-				dashboardMetrics: {
-					statsRequests: number;
-					totalWithStats: number;
-				};
-				trafficOverview: Array<{
-					time: string;
-					routes: Record<string, number>;
-					total: number;
-				}>;
-			};
-			timestamp: number;
-		}
-	> = new Map();
-	private analyticsCacheTTL = 30000; // 30 second cache for faster updates
+	private typedAnalyticsCache: AnalyticsCache; // Type-safe analytics cache helper
 
 	// Background user update queue to avoid Slack API limits
 	private userUpdateQueue: Set<string> = new Set();
@@ -148,6 +335,9 @@ class Cache {
 		this.db = new Database(dbPath);
 		this.defaultExpiration = defaultExpirationHours;
 		this.onEmojiExpired = onEmojiExpired;
+
+		// Initialize type-safe analytics cache
+		this.typedAnalyticsCache = new AnalyticsCache();
 
 		this.initDatabase();
 		this.setupPurgeSchedule();
@@ -819,7 +1009,7 @@ class Cache {
 			errorRate: number;
 			throughput: number;
 			apdex: number;
-			cachehitRate: number;
+			cacheHitRate: number;
 		};
 		peakTraffic: {
 			peakHour: string;
@@ -839,11 +1029,10 @@ class Cache {
 	}> {
 		// Check cache first
 		const cacheKey = `analytics_${days}`;
-		const cached = this.analyticsCache.get(cacheKey);
-		const now = Date.now();
+		const cached = this.typedAnalyticsCache.getAnalyticsData(cacheKey);
 
-		if (cached && now - cached.timestamp < this.analyticsCacheTTL) {
-			return cached.data;
+		if (cached) {
+			return cached;
 		}
 		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
 
@@ -1338,7 +1527,7 @@ class Cache {
 		const dataRequests = requestsByEndpoint
 			.filter((e) => e.endpoint === "User Data" || e.endpoint === "Emoji Data")
 			.reduce((sum, e) => sum + e.count, 0);
-		const cachehitRate =
+		const cacheHitRate =
 			redirectRequests + dataRequests > 0
 				? (redirectRequests / (redirectRequests + dataRequests)) * 100
 				: 0;
@@ -1649,7 +1838,7 @@ class Cache {
 				errorRate,
 				throughput,
 				apdex,
-				cachehitRate,
+				cacheHitRate,
 			},
 			peakTraffic: {
 				peakHour: peakHourData?.hour || "N/A",
@@ -1665,19 +1854,7 @@ class Cache {
 		};
 
 		// Cache the result
-		this.analyticsCache.set(cacheKey, {
-			data: result,
-			timestamp: now,
-		});
-
-		// Clean up old cache entries (keep only last 5)
-		if (this.analyticsCache.size > 5) {
-			const keys = Array.from(this.analyticsCache.keys());
-			const oldestKey = keys[0];
-			if (oldestKey) {
-				this.analyticsCache.delete(oldestKey);
-			}
-		}
+		this.typedAnalyticsCache.setAnalyticsData(cacheKey, result);
 
 		return result;
 	}
@@ -1694,11 +1871,10 @@ class Cache {
 	}> {
 		// Check cache first
 		const cacheKey = `essential_${days}`;
-		const cached = this.analyticsCache.get(cacheKey);
-		const now = Date.now();
+		const cached = this.typedAnalyticsCache.getEssentialStatsData(cacheKey);
 
-		if (cached && now - cached.timestamp < this.analyticsCacheTTL) {
-			return cached.data;
+		if (cached) {
+			return cached;
 		}
 
 		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -1737,10 +1913,7 @@ class Cache {
 		};
 
 		// Cache the result
-		this.analyticsCache.set(cacheKey, {
-			data: result,
-			timestamp: now,
-		});
+		this.typedAnalyticsCache.setEssentialStatsData(cacheKey, result);
 
 		return result;
 	}
@@ -1765,11 +1938,10 @@ class Cache {
 	}> {
 		// Check cache first
 		const cacheKey = `charts_${days}`;
-		const cached = this.analyticsCache.get(cacheKey);
-		const now = Date.now();
+		const cached = this.typedAnalyticsCache.getChartData(cacheKey);
 
-		if (cached && now - cached.timestamp < this.analyticsCacheTTL) {
-			return cached.data;
+		if (cached) {
+			return cached;
 		}
 
 		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -2011,10 +2183,7 @@ class Cache {
 		};
 
 		// Cache the result
-		this.analyticsCache.set(cacheKey, {
-			data: result,
-			timestamp: now,
-		});
+		this.typedAnalyticsCache.setChartData(cacheKey, result);
 
 		return result;
 	}
@@ -2029,11 +2198,10 @@ class Cache {
 	): Promise<Array<{ userAgent: string; count: number }>> {
 		// Check cache first
 		const cacheKey = `useragents_${days}`;
-		const cached = this.analyticsCache.get(cacheKey);
-		const now = Date.now();
+		const cached = this.typedAnalyticsCache.getUserAgentData(cacheKey);
 
-		if (cached && now - cached.timestamp < this.analyticsCacheTTL) {
-			return cached.data;
+		if (cached) {
+			return cached;
 		}
 
 		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -2053,10 +2221,7 @@ class Cache {
 			.all(cutoffTime) as Array<{ userAgent: string; count: number }>;
 
 		// Cache the result
-		this.analyticsCache.set(cacheKey, {
-			data: topUserAgents,
-			timestamp: now,
-		});
+		this.typedAnalyticsCache.setUserAgentData(cacheKey, topUserAgents);
 
 		return topUserAgents;
 	}
