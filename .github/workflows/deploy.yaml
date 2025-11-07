@@ -26,6 +26,5 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             ~/.bun/bin/bun install
-            ~/.bun/bin/bun run build
             sudo /usr/bin/systemctl restart cachet.service
           EOF
