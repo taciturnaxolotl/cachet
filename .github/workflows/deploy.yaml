@@ -46,18 +46,19 @@ jobs:
             BODY=$(echo "$RESPONSE" | sed '$d')
             
             if [ "$HTTP_CODE" = "200" ]; then
-              echo "✅ Service is healthy!"
-              echo "$BODY" | jq '.'
-              
-              # Check if status is actually healthy
               STATUS=$(echo "$BODY" | jq -r '.status // "unknown"')
+              
               if [ "$STATUS" = "healthy" ]; then
-                echo "✅ Deployment successful - service is healthy"
+                echo "✅ Service is healthy"
+                echo "$BODY" | jq '.'
                 exit 0
               elif [ "$STATUS" = "degraded" ]; then
                 echo "⚠️  Service is degraded but responding"
-                echo "$BODY" | jq '.checks'
+                echo "$BODY" | jq '.'
                 exit 0
+              else
+                echo "⚠️  Service returned HTTP 200 but status is: $STATUS"
+                echo "$BODY" | jq '.'
               fi
             fi
             
