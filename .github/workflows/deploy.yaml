@@ -19,7 +19,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
-      - name: file commands
+      - name: Deploy to server
         run: |
           ssh kierank@ember << 'EOF'
             cd ~/cachet
@@ -28,3 +28,47 @@ jobs:
             ~/.bun/bin/bun install
             sudo /usr/bin/systemctl restart cachet.service
           EOF
+      
+      - name: Wait for service to start
+        run: sleep 10
+      
+      - name: Health check
+        run: |
+          HEALTH_URL="http://ember:3000/health?detailed=true"
+          MAX_RETRIES=6
+          RETRY_DELAY=5
+          
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i/$MAX_RETRIES..."
+            
+            RESPONSE=$(curl -s -w "\n%{http_code}" "$HEALTH_URL" || echo "000")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Service is healthy!"
+              echo "$BODY" | jq '.'
+              
+              # Check if status is actually healthy
+              STATUS=$(echo "$BODY" | jq -r '.status // "unknown"')
+              if [ "$STATUS" = "healthy" ]; then
+                echo "✅ Deployment successful - service is healthy"
+                exit 0
+              elif [ "$STATUS" = "degraded" ]; then
+                echo "⚠️  Service is degraded but responding"
+                echo "$BODY" | jq '.checks'
+                exit 0
+              fi
+            fi
+            
+            echo "❌ Health check failed with HTTP $HTTP_CODE"
+            echo "$BODY"
+            
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+          
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          exit 1
