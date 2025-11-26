@@ -21,9 +21,19 @@ export function injectDependencies(
 }
 
 export const handleHealthCheck: RouteHandlerWithAnalytics = async (
-	_request,
+	request,
 	recordAnalytics,
 ) => {
+	const url = new URL(request.url);
+	const detailed = url.searchParams.get("detailed") === "true";
+
+	if (detailed) {
+		const health = await cache.detailedHealthCheck();
+		const statusCode = health.status === "unhealthy" ? 503 : health.status === "degraded" ? 200 : 200;
+		await recordAnalytics(statusCode);
+		return Response.json(health, { status: statusCode });
+	}
+
 	const isHealthy = await cache.healthCheck();
 	if (isHealthy) {
 		await recordAnalytics(200);

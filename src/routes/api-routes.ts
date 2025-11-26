@@ -26,15 +26,63 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				withAnalytics("/health", "GET", handlers.handleHealthCheck),
 				{
 					summary: "Health check",
-					description: "Check if the service is healthy and operational",
+					description:
+						"Check if the service is healthy and operational. Add ?detailed=true for comprehensive health information including Slack API status, queue depth, and memory usage.",
 					tags: ["Health"],
+					parameters: {
+						query: [
+							queryParam(
+								"detailed",
+								"boolean",
+								"Return detailed health check information",
+								false,
+								false,
+							),
+						],
+					},
 					responses: Object.fromEntries([
 						apiResponse(200, "Service is healthy", {
 							type: "object",
 							properties: {
-								status: { type: "string", example: "healthy" },
+								status: {
+									type: "string",
+									example: "healthy",
+									enum: ["healthy", "degraded", "unhealthy"],
+								},
 								cache: { type: "boolean", example: true },
 								uptime: { type: "number", example: 123456 },
+								checks: {
+									type: "object",
+									description: "Detailed checks (only with ?detailed=true)",
+									properties: {
+										database: {
+											type: "object",
+											properties: {
+												status: { type: "boolean" },
+												latency: { type: "number", description: "ms" },
+											},
+										},
+										slackApi: {
+											type: "object",
+											properties: {
+												status: { type: "boolean" },
+												error: { type: "string" },
+											},
+										},
+										queueDepth: {
+											type: "number",
+											description: "Number of users queued for update",
+										},
+										memoryUsage: {
+											type: "object",
+											properties: {
+												heapUsed: { type: "number", description: "MB" },
+												heapTotal: { type: "number", description: "MB" },
+												percentage: { type: "number" },
+											},
+										},
+									},
+								},
 							},
 						}),
 						apiResponse(503, "Service is unhealthy"),

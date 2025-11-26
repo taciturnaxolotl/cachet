@@ -602,6 +602,86 @@ class Cache {
 	}
 
 	/**
+	 * Detailed health check with component status
+	 * @returns Object with detailed health information
+	 */
+	async detailedHealthCheck(): Promise<{
+		status: "healthy" | "degraded" | "unhealthy";
+		checks: {
+			database: { status: boolean; latency?: number };
+			slackApi: { status: boolean; error?: string };
+			queueDepth: number;
+			memoryUsage: {
+				heapUsed: number;
+				heapTotal: number;
+				percentage: number;
+			};
+		};
+		uptime: number;
+	}> {
+		const checks = {
+			database: { status: false, latency: 0 },
+			slackApi: { status: false },
+			queueDepth: this.userUpdateQueue.size,
+			memoryUsage: {
+				heapUsed: 0,
+				heapTotal: 0,
+				percentage: 0,
+			},
+		};
+
+		// Check database
+		try {
+			const start = Date.now();
+			this.db.query("SELECT 1").get();
+			checks.database = { status: true, latency: Date.now() - start };
+		} catch (error) {
+			console.error("Database health check failed:", error);
+		}
+
+		// Check Slack API if wrapper is available
+		if (this.slackWrapper) {
+			try {
+				await this.slackWrapper.getUserInfo("U062UG485EE"); // Use a known test user
+				checks.slackApi = { status: true };
+			} catch (error) {
+				checks.slackApi = {
+					status: false,
+					error: error instanceof Error ? error.message : "Unknown error",
+				};
+			}
+		} else {
+			checks.slackApi = { status: true }; // No wrapper means not critical
+		}
+
+		// Check memory usage
+		const memUsage = process.memoryUsage();
+		checks.memoryUsage = {
+			heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+			heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+			percentage: Math.round(
+				(memUsage.heapUsed / memUsage.heapTotal) * 100,
+			),
+		};
+
+		// Determine overall status
+		let status: "healthy" | "degraded" | "unhealthy" = "healthy";
+		if (!checks.database.status) {
+			status = "unhealthy";
+		} else if (!checks.slackApi.status || checks.queueDepth > 100) {
+			status = "degraded";
+		} else if (checks.memoryUsage.percentage > 90) {
+			status = "degraded";
+		}
+
+		return {
+			status,
+			checks,
+			uptime: process.uptime(),
+		};
+	}
+
+	/**
 	 * Sets the Slack wrapper for user updates
 	 * @param slackWrapper SlackUserProvider instance for API calls
 	 */
