@@ -656,12 +656,27 @@ class Cache {
 
 		// Check memory usage
 		const memUsage = process.memoryUsage();
+		const bytesToMiB = (bytes: number) => bytes / 1024 / 1024;
+		
+		const heapUsedMiB = bytesToMiB(memUsage.heapUsed);
+		const heapTotalMiB = bytesToMiB(memUsage.heapTotal);
+		const heapPercent = heapTotalMiB > 0 ? (heapUsedMiB / heapTotalMiB) * 100 : 0;
+		const rssMiB = bytesToMiB(memUsage.rss);
+		const externalMiB = bytesToMiB(memUsage.external || 0);
+		const arrayBuffersMiB = bytesToMiB(memUsage.arrayBuffers || 0);
+		
 		checks.memoryUsage = {
-			heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
-			heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
-			percentage: Math.round(
-				(memUsage.heapUsed / memUsage.heapTotal) * 100,
-			),
+			heapUsed: Math.round(heapUsedMiB),
+			heapTotal: Math.round(heapTotalMiB),
+			percentage: Math.round(heapPercent),
+			details: {
+				heapUsedMiB: Number(heapUsedMiB.toFixed(2)),
+				heapTotalMiB: Number(heapTotalMiB.toFixed(2)),
+				heapPercent: Number(heapPercent.toFixed(2)),
+				rssMiB: Number(rssMiB.toFixed(2)),
+				externalMiB: Number(externalMiB.toFixed(2)),
+				arrayBuffersMiB: Number(arrayBuffersMiB.toFixed(2)),
+			},
 		};
 
 		// Determine overall status

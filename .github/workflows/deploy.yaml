@@ -34,7 +34,7 @@ jobs:
       
       - name: Health check
         run: |
-          HEALTH_URL="http://ember:3000/health?detailed=true"
+          HEALTH_URL="https://cachet.dunkirk.sh/health?detailed=true"
           MAX_RETRIES=6
           RETRY_DELAY=5
           
