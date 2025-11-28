@@ -125,11 +125,11 @@ type UserAgentData = Array<UserAgentMetrics>;
 /**
  * Discriminated union for all analytics cache data types
  */
-type AnalyticsCacheData = 
-	| { type: 'analytics'; data: FullAnalyticsData }
-	| { type: 'essential'; data: EssentialStatsData }
-	| { type: 'charts'; data: ChartData }
-	| { type: 'useragents'; data: UserAgentData };
+type AnalyticsCacheData =
+	| { type: "analytics"; data: FullAnalyticsData }
+	| { type: "essential"; data: EssentialStatsData }
+	| { type: "charts"; data: ChartData }
+	| { type: "useragents"; data: UserAgentData };
 
 /**
  * Type-safe analytics cache entry
@@ -142,20 +142,28 @@ interface AnalyticsCacheEntry {
 /**
  * Type guard functions for cache data
  */
-function isAnalyticsData(data: AnalyticsCacheData): data is { type: 'analytics'; data: FullAnalyticsData } {
-	return data.type === 'analytics';
+function isAnalyticsData(
+	data: AnalyticsCacheData,
+): data is { type: "analytics"; data: FullAnalyticsData } {
+	return data.type === "analytics";
 }
 
-function isEssentialStatsData(data: AnalyticsCacheData): data is { type: 'essential'; data: EssentialStatsData } {
-	return data.type === 'essential';
+function isEssentialStatsData(
+	data: AnalyticsCacheData,
+): data is { type: "essential"; data: EssentialStatsData } {
+	return data.type === "essential";
 }
 
-function isChartData(data: AnalyticsCacheData): data is { type: 'charts'; data: ChartData } {
-	return data.type === 'charts';
+function isChartData(
+	data: AnalyticsCacheData,
+): data is { type: "charts"; data: ChartData } {
+	return data.type === "charts";
 }
 
-function isUserAgentData(data: AnalyticsCacheData): data is { type: 'useragents'; data: UserAgentData } {
-	return data.type === 'useragents';
+function isUserAgentData(
+	data: AnalyticsCacheData,
+): data is { type: "useragents"; data: UserAgentData } {
+	return data.type === "useragents";
 }
 
 /**
@@ -178,8 +186,12 @@ class AnalyticsCache {
 	getAnalyticsData(key: string): FullAnalyticsData | null {
 		const cached = this.cache.get(key);
 		const now = Date.now();
-		
-		if (cached && now - cached.timestamp < this.cacheTTL && isAnalyticsData(cached.data)) {
+
+		if (
+			cached &&
+			now - cached.timestamp < this.cacheTTL &&
+			isAnalyticsData(cached.data)
+		) {
 			return cached.data.data;
 		}
 		return null;
@@ -191,8 +203,12 @@ class AnalyticsCache {
 	getEssentialStatsData(key: string): EssentialStatsData | null {
 		const cached = this.cache.get(key);
 		const now = Date.now();
-		
-		if (cached && now - cached.timestamp < this.cacheTTL && isEssentialStatsData(cached.data)) {
+
+		if (
+			cached &&
+			now - cached.timestamp < this.cacheTTL &&
+			isEssentialStatsData(cached.data)
+		) {
 			return cached.data.data;
 		}
 		return null;
@@ -204,8 +220,12 @@ class AnalyticsCache {
 	getChartData(key: string): ChartData | null {
 		const cached = this.cache.get(key);
 		const now = Date.now();
-		
-		if (cached && now - cached.timestamp < this.cacheTTL && isChartData(cached.data)) {
+
+		if (
+			cached &&
+			now - cached.timestamp < this.cacheTTL &&
+			isChartData(cached.data)
+		) {
 			return cached.data.data;
 		}
 		return null;
@@ -217,8 +237,12 @@ class AnalyticsCache {
 	getUserAgentData(key: string): UserAgentData | null {
 		const cached = this.cache.get(key);
 		const now = Date.now();
-		
-		if (cached && now - cached.timestamp < this.cacheTTL && isUserAgentData(cached.data)) {
+
+		if (
+			cached &&
+			now - cached.timestamp < this.cacheTTL &&
+			isUserAgentData(cached.data)
+		) {
 			return cached.data.data;
 		}
 		return null;
@@ -228,28 +252,28 @@ class AnalyticsCache {
 	 * Set analytics data in cache with type safety
 	 */
 	setAnalyticsData(key: string, data: FullAnalyticsData): void {
-		this.setCacheEntry(key, { type: 'analytics', data });
+		this.setCacheEntry(key, { type: "analytics", data });
 	}
 
 	/**
 	 * Set essential stats data in cache with type safety
 	 */
 	setEssentialStatsData(key: string, data: EssentialStatsData): void {
-		this.setCacheEntry(key, { type: 'essential', data });
+		this.setCacheEntry(key, { type: "essential", data });
 	}
 
 	/**
 	 * Set chart data in cache with type safety
 	 */
 	setChartData(key: string, data: ChartData): void {
-		this.setCacheEntry(key, { type: 'charts', data });
+		this.setCacheEntry(key, { type: "charts", data });
 	}
 
 	/**
 	 * Set user agent data in cache with type safety
 	 */
 	setUserAgentData(key: string, data: UserAgentData): void {
-		this.setCacheEntry(key, { type: 'useragents', data });
+		this.setCacheEntry(key, { type: "useragents", data });
 	}
 
 	/**
@@ -657,14 +681,15 @@ class Cache {
 		// Check memory usage
 		const memUsage = process.memoryUsage();
 		const bytesToMiB = (bytes: number) => bytes / 1024 / 1024;
-		
+
 		const heapUsedMiB = bytesToMiB(memUsage.heapUsed);
 		const heapTotalMiB = bytesToMiB(memUsage.heapTotal);
-		const heapPercent = heapTotalMiB > 0 ? (heapUsedMiB / heapTotalMiB) * 100 : 0;
+		const heapPercent =
+			heapTotalMiB > 0 ? (heapUsedMiB / heapTotalMiB) * 100 : 0;
 		const rssMiB = bytesToMiB(memUsage.rss);
 		const externalMiB = bytesToMiB(memUsage.external || 0);
 		const arrayBuffersMiB = bytesToMiB(memUsage.arrayBuffers || 0);
-		
+
 		checks.memoryUsage = {
 			heapUsed: Math.round(heapUsedMiB),
 			heapTotal: Math.round(heapTotalMiB),

@@ -82,12 +82,30 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 												details: {
 													type: "object",
 													properties: {
-														heapUsedMiB: { type: "number", description: "Precise heap used in MiB" },
-														heapTotalMiB: { type: "number", description: "Precise heap total in MiB" },
-														heapPercent: { type: "number", description: "Precise heap percentage" },
-														rssMiB: { type: "number", description: "Resident Set Size in MiB" },
-														externalMiB: { type: "number", description: "External memory in MiB" },
-														arrayBuffersMiB: { type: "number", description: "Array buffers in MiB" },
+														heapUsedMiB: {
+															type: "number",
+															description: "Precise heap used in MiB",
+														},
+														heapTotalMiB: {
+															type: "number",
+															description: "Precise heap total in MiB",
+														},
+														heapPercent: {
+															type: "number",
+															description: "Precise heap percentage",
+														},
+														rssMiB: {
+															type: "number",
+															description: "Resident Set Size in MiB",
+														},
+														externalMiB: {
+															type: "number",
+															description: "External memory in MiB",
+														},
+														arrayBuffersMiB: {
+															type: "number",
+															description: "Array buffers in MiB",
+														},
 													},
 												},
 											},

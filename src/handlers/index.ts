@@ -29,7 +29,12 @@ export const handleHealthCheck: RouteHandlerWithAnalytics = async (
 
 	if (detailed) {
 		const health = await cache.detailedHealthCheck();
-		const statusCode = health.status === "unhealthy" ? 503 : health.status === "degraded" ? 200 : 200;
+		const statusCode =
+			health.status === "unhealthy"
+				? 503
+				: health.status === "degraded"
+					? 200
+					: 200;
 		await recordAnalytics(statusCode);
 		return Response.json(health, { status: statusCode });
 	}
