@@ -1,838 +1,844 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cachet Analytics Dashboard</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
-    <style>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
 
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          sans-serif;
-        background: #f9fafb;
-        color: #111827;
-        line-height: 1.6;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cachet Analytics Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+  <script
+    src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-      .header {
-        background: #fff;
-        padding: 1.5rem 2rem;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        margin-bottom: 2rem;
-        border-bottom: 1px solid #e5e7eb;
-      }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        sans-serif;
+      background: #f9fafb;
+      color: #111827;
+      line-height: 1.6;
+    }
 
-      .header h1 {
-        color: #111827;
-        font-size: 1.875rem;
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-      }
+    .header {
+      background: #fff;
+      padding: 1.5rem 2rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 2rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
 
-      .header-links {
-        display: flex;
-        gap: 1.5rem;
-      }
+    .header h1 {
+      color: #111827;
+      font-size: 1.875rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
 
-      .header-links a {
-        color: #6366f1;
-        text-decoration: none;
-        font-weight: 500;
-      }
+    .header-links {
+      display: flex;
+      gap: 1.5rem;
+    }
 
-      .header-links a:hover {
-        color: #4f46e5;
-        text-decoration: underline;
-      }
+    .header-links a {
+      color: #6366f1;
+      text-decoration: none;
+      font-weight: 500;
+    }
 
-      .controls {
-        margin-bottom: 2rem;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-      }
+    .header-links a:hover {
+      color: #4f46e5;
+      text-decoration: underline;
+    }
 
-      .controls select,
-      .controls button {
-        padding: 0.75rem 1.25rem;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        background: white;
-        cursor: pointer;
-        font-size: 0.875rem;
-        font-weight: 500;
-        transition: all 0.2s ease;
-      }
+    .controls {
+      margin-bottom: 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
 
-      .controls select:hover,
-      .controls select:focus {
-        border-color: #6366f1;
-        outline: none;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      }
+    .controls select,
+    .controls button {
+      padding: 0.75rem 1.25rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
 
-      .controls button {
-        background: #6366f1;
-        color: white;
-        border: none;
-      }
+    .controls select:hover,
+    .controls select:focus {
+      border-color: #6366f1;
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
 
-      .controls button:hover {
-        background: #4f46e5;
-      }
+    .controls button {
+      background: #6366f1;
+      color: white;
+      border: none;
+    }
 
-      .controls button:disabled {
-        background: #9ca3af;
-        cursor: not-allowed;
-      }
+    .controls button:hover {
+      background: #4f46e5;
+    }
 
-      .dashboard {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 2rem;
+    .controls button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+
+    .dashboard {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 2rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 3rem;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      text-align: center;
+      border: 1px solid #e5e7eb;
+      transition: all 0.2s ease;
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .stat-number {
+      font-weight: 800;
+      color: #111827;
+      margin-bottom: 0.5rem;
+      font-size: 2.5rem;
+      line-height: 1;
+    }
+
+    .stat-label {
+      color: #6b7280;
+      font-weight: 600;
+      font-size: 0.875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 768px) {
+      .charts-row {
+        grid-template-columns: 1fr;
       }
 
       .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 3rem;
+        grid-template-columns: 1fr;
       }
 
-      .stat-card {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        border: 1px solid #e5e7eb;
-        transition: all 0.2s ease;
-        min-height: 140px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-      }
-
-      .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      .dashboard {
+        padding: 0 1rem;
       }
 
       .stat-number {
-        font-weight: 800;
-        color: #111827;
-        margin-bottom: 0.5rem;
-        font-size: 2.5rem;
-        line-height: 1;
+        font-size: 2rem;
       }
+    }
 
-      .stat-label {
-        color: #6b7280;
-        font-weight: 600;
-        font-size: 0.875rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .chart-container {
+      background: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e5e7eb;
+      height: 25rem;
+      padding-bottom: 5rem;
+    }
+
+    .chart-title {
+      font-size: 1.25rem;
+      margin-bottom: 1.5rem;
+      color: #111827;
+      font-weight: 700;
+    }
+
+    .user-agents-table {
+      background: white;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e5e7eb;
+    }
+
+    .search-container {
+      margin-bottom: 1.5rem;
+      position: relative;
+    }
+
+    .search-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      background: #f9fafb;
+      transition: border-color 0.2s ease;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #6366f1;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .ua-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    .ua-table th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      background: #f9fafb;
+      border-bottom: 2px solid #e5e7eb;
+      font-weight: 600;
+      color: #374151;
+      position: sticky;
+      top: 0;
+    }
+
+    .ua-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #f3f4f6;
+      vertical-align: top;
+    }
+
+    .ua-table tbody tr:hover {
+      background: #f9fafb;
+    }
+
+    .ua-name {
+      font-weight: 500;
+      color: #111827;
+      line-height: 1.4;
+      max-width: 400px;
+      word-break: break-word;
+    }
+
+    .ua-raw {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #6b7280;
+      margin-top: 0.25rem;
+      max-width: 400px;
+      word-break: break-all;
+      line-height: 1.3;
+    }
+
+    .ua-count {
+      font-weight: 600;
+      color: #111827;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .ua-percentage {
+      color: #6b7280;
+      text-align: right;
+      font-size: 0.75rem;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 2rem;
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #6b7280;
+    }
+
+    .loading-spinner {
+      display: inline-block;
+      width: 2rem;
+      height: 2rem;
+      border: 3px solid #e5e7eb;
+      border-radius: 50%;
+      border-top-color: #6366f1;
+      animation: spin 1s ease-in-out infinite;
+      margin-bottom: 1rem;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
       }
+    }
 
-      .charts-grid {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 2rem;
-        margin-bottom: 3rem;
-      }
+    .error {
+      background: #fef2f2;
+      color: #dc2626;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+      border: 1px solid #fecaca;
+    }
 
-      .charts-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 2rem;
-      }
+    .auto-refresh {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
 
-      @media (max-width: 768px) {
-        .charts-row {
-          grid-template-columns: 1fr;
-        }
+    .auto-refresh input[type="checkbox"] {
+      transform: scale(1.1);
+      accent-color: #6366f1;
+    }
+  </style>
+</head>
 
-        .stats-grid {
-          grid-template-columns: 1fr;
-        }
+<body>
+  <div class="header">
+    <h1>📊 Cachet Analytics Dashboard</h1>
+    <div class="header-links">
+      <a href="https://github.com/taciturnaxolotl/cachet">Github</a>
+      <a href="/swagger">API Docs</a>
+      <a href="/stats">Raw Stats</a>
+      <a href="https://status.dunkirk.sh/status/cachet">Status</a>
+    </div>
+  </div>
 
-        .dashboard {
-          padding: 0 1rem;
-        }
-
-        .stat-number {
-          font-size: 2rem;
-        }
-      }
-
-      .chart-container {
-        background: white;
-        padding: 1.5rem;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e5e7eb;
-        height: 25rem;
-        padding-bottom: 5rem;
-      }
-
-      .chart-title {
-        font-size: 1.25rem;
-        margin-bottom: 1.5rem;
-        color: #111827;
-        font-weight: 700;
-      }
-
-      .user-agents-table {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        border: 1px solid #e5e7eb;
-      }
-
-      .search-container {
-        margin-bottom: 1.5rem;
-        position: relative;
-      }
-
-      .search-input {
-        width: 100%;
-        padding: 0.75rem 1rem;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        font-size: 0.875rem;
-        background: #f9fafb;
-        transition: border-color 0.2s ease;
-      }
-
-      .search-input:focus {
-        outline: none;
-        border-color: #6366f1;
-        background: white;
-        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-      }
-
-      .ua-table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.875rem;
-      }
-
-      .ua-table th {
-        text-align: left;
-        padding: 0.75rem 1rem;
-        background: #f9fafb;
-        border-bottom: 2px solid #e5e7eb;
-        font-weight: 600;
-        color: #374151;
-        position: sticky;
-        top: 0;
-      }
-
-      .ua-table td {
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid #f3f4f6;
-        vertical-align: top;
-      }
-
-      .ua-table tbody tr:hover {
-        background: #f9fafb;
-      }
-
-      .ua-name {
-        font-weight: 500;
-        color: #111827;
-        line-height: 1.4;
-        max-width: 400px;
-        word-break: break-word;
-      }
-
-      .ua-raw {
-        font-family: monospace;
-        font-size: 0.75rem;
-        color: #6b7280;
-        margin-top: 0.25rem;
-        max-width: 400px;
-        word-break: break-all;
-        line-height: 1.3;
-      }
-
-      .ua-count {
-        font-weight: 600;
-        color: #111827;
-        text-align: right;
-        white-space: nowrap;
-      }
-
-      .ua-percentage {
-        color: #6b7280;
-        text-align: right;
-        font-size: 0.75rem;
-      }
-
-      .no-results {
-        text-align: center;
-        padding: 2rem;
-        color: #6b7280;
-        font-style: italic;
-      }
-
-      .loading {
-        text-align: center;
-        padding: 3rem;
-        color: #6b7280;
-      }
-
-      .loading-spinner {
-        display: inline-block;
-        width: 2rem;
-        height: 2rem;
-        border: 3px solid #e5e7eb;
-        border-radius: 50%;
-        border-top-color: #6366f1;
-        animation: spin 1s ease-in-out infinite;
-        margin-bottom: 1rem;
-      }
-
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-
-      .error {
-        background: #fef2f2;
-        color: #dc2626;
-        padding: 1rem;
-        border-radius: 8px;
-        margin: 1rem 0;
-        border: 1px solid #fecaca;
-      }
-
-      .auto-refresh {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        font-size: 0.875rem;
-        color: #6b7280;
-      }
-
-      .auto-refresh input[type="checkbox"] {
-        transform: scale(1.1);
-        accent-color: #6366f1;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="header">
-      <h1>📊 Cachet Analytics Dashboard</h1>
-      <div class="header-links">
-        <a href="https://github.com/taciturnaxolotl/cachet">Github</a>
-        <a href="/swagger">API Docs</a>
-        <a href="/stats">Raw Stats</a>
+  <div class="dashboard">
+    <div class="controls">
+      <select id="daysSelect">
+        <option value="1">Last 24 hours</option>
+        <option value="7" selected>Last 7 days</option>
+        <option value="30">Last 30 days</option>
+      </select>
+      <button id="refreshBtn" onclick="loadData()">Refresh</button>
+      <div class="auto-refresh">
+        <input type="checkbox" id="autoRefresh" />
+        <label for="autoRefresh">Auto-refresh (30s)</label>
       </div>
     </div>
 
-    <div class="dashboard">
-      <div class="controls">
-        <select id="daysSelect">
-          <option value="1">Last 24 hours</option>
-          <option value="7" selected>Last 7 days</option>
-          <option value="30">Last 30 days</option>
-        </select>
-        <button id="refreshBtn" onclick="loadData()">Refresh</button>
-        <div class="auto-refresh">
-          <input type="checkbox" id="autoRefresh" />
-          <label for="autoRefresh">Auto-refresh (30s)</label>
+    <div id="loading" class="loading">
+      <div class="loading-spinner"></div>
+      Loading analytics data...
+    </div>
+    <div id="error" class="error" style="display: none"></div>
+
+    <div id="content" style="display: none">
+      <!-- Key Metrics -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="totalRequests">-</div>
+          <div class="stat-label">Total Requests</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="uptime">-</div>
+          <div class="stat-label">Uptime</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="avgResponseTime">-</div>
+          <div class="stat-label">Avg Response Time</div>
         </div>
       </div>
 
-      <div id="loading" class="loading">
-        <div class="loading-spinner"></div>
-        Loading analytics data...
+      <!-- Main Charts -->
+      <div class="charts-grid">
+        <div class="charts-row">
+          <div class="chart-container">
+            <div class="chart-title">Requests Over Time</div>
+            <canvas id="requestsChart"></canvas>
+          </div>
+          <div class="chart-container">
+            <div class="chart-title">Latency Over Time</div>
+            <canvas id="latencyChart"></canvas>
+          </div>
+        </div>
       </div>
-      <div id="error" class="error" style="display: none"></div>
 
-      <div id="content" style="display: none">
-        <!-- Key Metrics -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-number" id="totalRequests">-</div>
-            <div class="stat-label">Total Requests</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="uptime">-</div>
-            <div class="stat-label">Uptime</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-number" id="avgResponseTime">-</div>
-            <div class="stat-label">Avg Response Time</div>
-          </div>
+      <!-- User Agents Table -->
+      <div class="user-agents-table">
+        <div class="chart-title">User Agents</div>
+        <div class="search-container">
+          <input type="text" id="userAgentSearch" class="search-input" placeholder="Search user agents...">
         </div>
-
-        <!-- Main Charts -->
-        <div class="charts-grid">
-          <div class="charts-row">
-            <div class="chart-container">
-              <div class="chart-title">Requests Over Time</div>
-              <canvas id="requestsChart"></canvas>
-            </div>
-            <div class="chart-container">
-              <div class="chart-title">Latency Over Time</div>
-              <canvas id="latencyChart"></canvas>
-            </div>
-          </div>
-        </div>
-
-        <!-- User Agents Table -->
-        <div class="user-agents-table">
-          <div class="chart-title">User Agents</div>
-          <div class="search-container">
-            <input type="text" id="userAgentSearch" class="search-input" placeholder="Search user agents...">
-          </div>
-          <div id="userAgentsTable">
-            <div class="loading">Loading user agents...</div>
-          </div>
+        <div id="userAgentsTable">
+          <div class="loading">Loading user agents...</div>
         </div>
       </div>
     </div>
+  </div>
 
-    <script>
-      const charts = {};
-      let autoRefreshInterval;
-      const _currentData = null;
-      let _isLoading = false;
-      let currentRequestId = 0;
-      let abortController = null;
+  <script>
+    const charts = {};
+    let autoRefreshInterval;
+    const _currentData = null;
+    let _isLoading = false;
+    let currentRequestId = 0;
+    let abortController = null;
 
-      // Debounced resize handler for charts
-      let resizeTimeout;
-      function handleResize() {
-        clearTimeout(resizeTimeout);
-        resizeTimeout = setTimeout(() => {
-          Object.values(charts).forEach(chart => {
-            if (chart && typeof chart.resize === 'function') {
-              chart.resize();
-            }
-          });
-        }, 250);
-      }
-
-      window.addEventListener('resize', handleResize);
-
-      async function loadData() {
-        // Cancel any existing requests
-        if (abortController) {
-          abortController.abort();
-        }
-
-        // Create new abort controller for this request
-        abortController = new AbortController();
-        const requestId = ++currentRequestId;
-        const signal = abortController.signal;
-
-        _isLoading = true;
-        const startTime = Date.now();
-
-        // Capture the days value at the start to ensure consistency
-        const days = document.getElementById("daysSelect").value;
-        const loading = document.getElementById("loading");
-        const error = document.getElementById("error");
-        const content = document.getElementById("content");
-        const refreshBtn = document.getElementById("refreshBtn");
-
-        console.log(`Starting request ${requestId} for ${days} days`);
-
-        // Update UI state
-        loading.style.display = "block";
-        error.style.display = "none";
-        content.style.display = "none";
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = "Loading...";
-
-        try {
-          // Step 1: Load essential stats first (fastest)
-          console.log(`[${requestId}] Loading essential stats...`);
-          const essentialResponse = await fetch(`/api/stats/essential?days=${days}`, { signal });
-
-          // Check if this request is still current
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (essential stats)`);
-            return;
-          }
-
-          if (!essentialResponse.ok) throw new Error(`HTTP ${essentialResponse.status}`);
-
-          const essentialData = await essentialResponse.json();
-
-          // Double-check we're still the current request
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (essential stats after response)`);
-            return;
-          }
-
-          updateEssentialStats(essentialData);
-
-          // Show content immediately with essential stats
-          loading.style.display = "none";
-          content.style.display = "block";
-          refreshBtn.textContent = "Loading Charts...";
-
-          console.log(`[${requestId}] Essential stats loaded in ${Date.now() - startTime}ms`);
-
-          // Step 2: Load chart data (medium speed)
-          console.log(`[${requestId}] Loading chart data...`);
-          const chartResponse = await fetch(`/api/stats/charts?days=${days}`, { signal });
-
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (chart data)`);
-            return;
-          }
-
-          if (!chartResponse.ok) throw new Error(`HTTP ${chartResponse.status}`);
-
-          const chartData = await chartResponse.json();
-
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (chart data after response)`);
-            return;
-          }
-
-          updateCharts(chartData, parseInt(days, 10));
-          refreshBtn.textContent = "Loading User Agents...";
-
-          console.log(`[${requestId}] Charts loaded in ${Date.now() - startTime}ms`);
-
-          // Step 3: Load user agents last (slowest)
-          console.log(`[${requestId}] Loading user agents...`);
-          const userAgentsResponse = await fetch(`/api/stats/useragents?days=${days}`, { signal });
-
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (user agents)`);
-            return;
-          }
-
-          if (!userAgentsResponse.ok) throw new Error(`HTTP ${userAgentsResponse.status}`);
-
-          const userAgentsData = await userAgentsResponse.json();
-
-          if (requestId !== currentRequestId) {
-            console.log(`[${requestId}] Request cancelled (user agents after response)`);
-            return;
-          }
-
-          updateUserAgentsTable(userAgentsData);
-
-          const totalTime = Date.now() - startTime;
-          console.log(`[${requestId}] All data loaded in ${totalTime}ms`);
-        } catch (err) {
-          // Only show error if this is still the current request
-          if (requestId === currentRequestId) {
-            if (err.name === 'AbortError') {
-              console.log(`[${requestId}] Request aborted`);
-            } else {
-              loading.style.display = "none";
-              error.style.display = "block";
-              error.textContent = `Failed to load data: ${err.message}`;
-              console.error(`[${requestId}] Error: ${err.message}`);
-            }
-          }
-        } finally {
-          // Only update UI if this is still the current request
-          if (requestId === currentRequestId) {
-            _isLoading = false;
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = "Refresh";
-            abortController = null;
-          }
-        }
-      }
-
-      // Update just the essential stats (fast)
-      function updateEssentialStats(data) {
-        document.getElementById("totalRequests").textContent = data.totalRequests.toLocaleString();
-        document.getElementById("uptime").textContent = `${data.uptime.toFixed(1)}%`;
-        document.getElementById("avgResponseTime").textContent =
-          data.averageResponseTime ? `${Math.round(data.averageResponseTime)}ms` : "N/A";
-      }
-
-      // Update charts (medium speed)
-      function updateCharts(data, days) {
-        updateRequestsChart(data.requestsByDay, days === 1);
-        updateLatencyChart(data.latencyOverTime, days === 1);
-      }
-
-
-      // Requests Over Time Chart
-      function updateRequestsChart(data, _isHourly) {
-        const ctx = document.getElementById("requestsChart").getContext("2d");
-        const days = parseInt(document.getElementById("daysSelect").value, 10);
-
-        if (charts.requests) charts.requests.destroy();
-
-        // Format labels based on granularity
-        const labels = data.map((d) => {
-          if (days === 1) {
-            // 15-minute intervals: show just time
-            return d.date.split(" ")[1] || d.date;
-          } else if (days <= 7) {
-            // Hourly: show date + hour
-            const parts = d.date.split(" ");
-            const date = parts[0].split("-")[2]; // Get day
-            const hour = parts[1] || "00:00";
-            return `${date} ${hour}`;
-          } else {
-            // 4-hour intervals: show abbreviated
-            return d.date.split(" ")[0];
+    // Debounced resize handler for charts
+    let resizeTimeout;
+    function handleResize() {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        Object.values(charts).forEach(chart => {
+          if (chart && typeof chart.resize === 'function') {
+            chart.resize();
           }
         });
+      }, 250);
+    }
 
-        charts.requests = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: "Requests",
-              data: data.map((d) => d.count),
-              borderColor: "#6366f1",
-              backgroundColor: "rgba(99, 102, 241, 0.1)",
-              tension: 0.4,
-              fill: true,
-              borderWidth: 1.5,
-              pointRadius: 1,
-              pointBackgroundColor: "#6366f1",
-            }],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  title: (context) => {
-                    const original = data[context[0].dataIndex];
-                    if (days === 1) return `Time: ${original.date}`;
-                    if (days <= 7) return `DateTime: ${original.date}`;
-                    return `Interval: ${original.date}`;
-                  },
-                  label: (context) => `Requests: ${context.parsed.y.toLocaleString()}`
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
-                },
-                grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                ticks: {
-                  maxTicksLimit: days === 1 ? 12 : 20,
-                  maxRotation: 0,
-                  minRotation: 0
-                }
-              },
-              y: {
-                title: { display: true, text: 'Requests' },
-                beginAtZero: true,
-                grid: { color: 'rgba(0, 0, 0, 0.05)' }
-              }
-            }
-          }
-        });
+    window.addEventListener('resize', handleResize);
+
+    async function loadData() {
+      // Cancel any existing requests
+      if (abortController) {
+        abortController.abort();
       }
 
-      // Latency Over Time Chart
-      function updateLatencyChart(data, _isHourly) {
-        const ctx = document.getElementById("latencyChart").getContext("2d");
-        const days = parseInt(document.getElementById("daysSelect").value, 10);
+      // Create new abort controller for this request
+      abortController = new AbortController();
+      const requestId = ++currentRequestId;
+      const signal = abortController.signal;
 
-        if (charts.latency) charts.latency.destroy();
+      _isLoading = true;
+      const startTime = Date.now();
 
-        // Format labels based on granularity
-        const labels = data.map((d) => {
-          if (days === 1) {
-            // 15-minute intervals: show just time
-            return d.time.split(" ")[1] || d.time;
-          } else if (days <= 7) {
-            // Hourly: show date + hour
-            const parts = d.time.split(" ");
-            const date = parts[0].split("-")[2]; // Get day
-            const hour = parts[1] || "00:00";
-            return `${date} ${hour}`;
-          } else {
-            // 4-hour intervals: show abbreviated
-            return d.time.split(" ")[0];
-          }
-        });
+      // Capture the days value at the start to ensure consistency
+      const days = document.getElementById("daysSelect").value;
+      const loading = document.getElementById("loading");
+      const error = document.getElementById("error");
+      const content = document.getElementById("content");
+      const refreshBtn = document.getElementById("refreshBtn");
 
-        // Calculate dynamic max for logarithmic scale
-        const responseTimes = data.map((d) => d.averageResponseTime);
-        const maxResponseTime = Math.max(...responseTimes);
+      console.log(`Starting request ${requestId} for ${days} days`);
 
-        // Calculate appropriate max for log scale (next power of 10)
-        const logMax = 10 ** Math.ceil(Math.log10(maxResponseTime));
+      // Update UI state
+      loading.style.display = "block";
+      error.style.display = "none";
+      content.style.display = "none";
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Loading...";
 
-        // Generate dynamic tick values based on the data range
-        const generateLogTicks = (_min, max) => {
-          const ticks = [];
-          let current = 1;
-          while (current <= max) {
-            ticks.push(current);
-            current *= 10;
-          }
-          return ticks;
-        };
+      try {
+        // Step 1: Load essential stats first (fastest)
+        console.log(`[${requestId}] Loading essential stats...`);
+        const essentialResponse = await fetch(`/api/stats/essential?days=${days}`, {signal});
 
-        const dynamicTicks = generateLogTicks(1, logMax);
-
-        charts.latency = new Chart(ctx, {
-          type: "line",
-          data: {
-            labels: labels,
-            datasets: [{
-              label: "Average Response Time",
-              data: responseTimes,
-              borderColor: "#10b981",
-              backgroundColor: "rgba(16, 185, 129, 0.1)",
-              tension: 0.4,
-              fill: true,
-              borderWidth: 1.5,
-              pointRadius: 1,
-              pointBackgroundColor: "#10b981",
-            }],
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  title: (context) => {
-                    const original = data[context[0].dataIndex];
-                    if (days === 1) return `Time: ${original.time}`;
-                    if (days <= 7) return `DateTime: ${original.time}`;
-                    return `Interval: ${original.time}`;
-                  },
-                  label: (context) => {
-                    const point = data[context.dataIndex];
-                    return [
-                      `Response Time: ${Math.round(context.parsed.y)}ms`,
-                      `Request Count: ${point.count.toLocaleString()}`
-                    ];
-                  }
-                }
-              }
-            },
-            scales: {
-              x: {
-                title: {
-                  display: true,
-                  text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
-                },
-                grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                ticks: {
-                  maxTicksLimit: days === 1 ? 12 : 20,
-                  maxRotation: 0,
-                  minRotation: 0
-                }
-              },
-              y: {
-                type: 'logarithmic',
-                title: { display: true, text: 'Response Time (ms, log scale)' },
-                min: 1,
-                max: logMax,
-                grid: { color: 'rgba(0, 0, 0, 0.05)' },
-                ticks: {
-                  callback: (value) => {
-                    // Show clean numbers based on dynamic range
-                    if (dynamicTicks.includes(value)) {
-                      return `${value}ms`;
-                    }
-                    return '';
-                  }
-                }
-              }
-            }
-          }
-        });
-      }
-
-      // User Agents Table
-      let allUserAgents = [];
-
-      function updateUserAgentsTable(userAgents) {
-        allUserAgents = userAgents;
-        renderUserAgentsTable(userAgents);
-        setupUserAgentSearch();
-      }
-
-      function parseUserAgent(ua) {
-        // Keep strange/unique ones as-is
-        if (ua.length < 50 ||
-            !ua.includes('Mozilla/') ||
-            ua.includes('bot') ||
-            ua.includes('crawler') ||
-            ua.includes('spider') ||
-            !ua.includes('AppleWebKit') ||
-            ua.includes('Shiba-Arcade') ||
-            ua === 'node' ||
-            ua.includes('curl') ||
-            ua.includes('python') ||
-            ua.includes('PostmanRuntime')) {
-          return ua;
-        }
-
-        // Parse common browsers
-        const os = ua.includes('Macintosh') ? 'macOS' :
-                  ua.includes('Windows NT 10.0') ? 'Windows 10' :
-                  ua.includes('Windows NT') ? 'Windows' :
-                  ua.includes('X11; Linux') ? 'Linux' :
-                  ua.includes('iPhone') ? 'iOS' :
-                  ua.includes('Android') ? 'Android' : 'Unknown OS';
-
-        // Detect browser and version
-        let browser = 'Unknown Browser';
-
-        if (ua.includes('Edg/')) {
-          const match = ua.match(/Edg\/(\d+\.\d+)/);
-          const version = match ? match[1] : '';
-          browser = `Edge ${version}`;
-        } else if (ua.includes('Chrome/')) {
-          const match = ua.match(/Chrome\/(\d+\.\d+)/);
-          const version = match ? match[1] : '';
-          browser = `Chrome ${version}`;
-        } else if (ua.includes('Firefox/')) {
-          const match = ua.match(/Firefox\/(\d+\.\d+)/);
-          const version = match ? match[1] : '';
-          browser = `Firefox ${version}`;
-        } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
-          browser = 'Safari';
-        }
-
-        return `${browser} (${os})`;
-      }
-
-      function renderUserAgentsTable(userAgents) {
-        const container = document.getElementById("userAgentsTable");
-
-        if (userAgents.length === 0) {
-          container.innerHTML = '<div class="no-results">No user agents found</div>';
+        // Check if this request is still current
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (essential stats)`);
           return;
         }
 
-        const totalRequests = userAgents.reduce((sum, ua) => sum + ua.count, 0);
+        if (!essentialResponse.ok) throw new Error(`HTTP ${essentialResponse.status}`);
 
-        const tableHTML = `
+        const essentialData = await essentialResponse.json();
+
+        // Double-check we're still the current request
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (essential stats after response)`);
+          return;
+        }
+
+        updateEssentialStats(essentialData);
+
+        // Show content immediately with essential stats
+        loading.style.display = "none";
+        content.style.display = "block";
+        refreshBtn.textContent = "Loading Charts...";
+
+        console.log(`[${requestId}] Essential stats loaded in ${Date.now() - startTime}ms`);
+
+        // Step 2: Load chart data (medium speed)
+        console.log(`[${requestId}] Loading chart data...`);
+        const chartResponse = await fetch(`/api/stats/charts?days=${days}`, {signal});
+
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (chart data)`);
+          return;
+        }
+
+        if (!chartResponse.ok) throw new Error(`HTTP ${chartResponse.status}`);
+
+        const chartData = await chartResponse.json();
+
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (chart data after response)`);
+          return;
+        }
+
+        updateCharts(chartData, parseInt(days, 10));
+        refreshBtn.textContent = "Loading User Agents...";
+
+        console.log(`[${requestId}] Charts loaded in ${Date.now() - startTime}ms`);
+
+        // Step 3: Load user agents last (slowest)
+        console.log(`[${requestId}] Loading user agents...`);
+        const userAgentsResponse = await fetch(`/api/stats/useragents?days=${days}`, {signal});
+
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (user agents)`);
+          return;
+        }
+
+        if (!userAgentsResponse.ok) throw new Error(`HTTP ${userAgentsResponse.status}`);
+
+        const userAgentsData = await userAgentsResponse.json();
+
+        if (requestId !== currentRequestId) {
+          console.log(`[${requestId}] Request cancelled (user agents after response)`);
+          return;
+        }
+
+        updateUserAgentsTable(userAgentsData);
+
+        const totalTime = Date.now() - startTime;
+        console.log(`[${requestId}] All data loaded in ${totalTime}ms`);
+      } catch (err) {
+        // Only show error if this is still the current request
+        if (requestId === currentRequestId) {
+          if (err.name === 'AbortError') {
+            console.log(`[${requestId}] Request aborted`);
+          } else {
+            loading.style.display = "none";
+            error.style.display = "block";
+            error.textContent = `Failed to load data: ${err.message}`;
+            console.error(`[${requestId}] Error: ${err.message}`);
+          }
+        }
+      } finally {
+        // Only update UI if this is still the current request
+        if (requestId === currentRequestId) {
+          _isLoading = false;
+          refreshBtn.disabled = false;
+          refreshBtn.textContent = "Refresh";
+          abortController = null;
+        }
+      }
+    }
+
+    // Update just the essential stats (fast)
+    function updateEssentialStats(data) {
+      document.getElementById("totalRequests").textContent = data.totalRequests.toLocaleString();
+      document.getElementById("uptime").textContent = `${data.uptime.toFixed(1)}%`;
+      document.getElementById("avgResponseTime").textContent =
+        data.averageResponseTime ? `${Math.round(data.averageResponseTime)}ms` : "N/A";
+    }
+
+    // Update charts (medium speed)
+    function updateCharts(data, days) {
+      updateRequestsChart(data.requestsByDay, days === 1);
+      updateLatencyChart(data.latencyOverTime, days === 1);
+    }
+
+
+    // Requests Over Time Chart
+    function updateRequestsChart(data, _isHourly) {
+      const ctx = document.getElementById("requestsChart").getContext("2d");
+      const days = parseInt(document.getElementById("daysSelect").value, 10);
+
+      if (charts.requests) charts.requests.destroy();
+
+      // Format labels based on granularity
+      const labels = data.map((d) => {
+        if (days === 1) {
+          // 15-minute intervals: show just time
+          return d.date.split(" ")[1] || d.date;
+        } else if (days <= 7) {
+          // Hourly: show date + hour
+          const parts = d.date.split(" ");
+          const date = parts[0].split("-")[2]; // Get day
+          const hour = parts[1] || "00:00";
+          return `${date} ${hour}`;
+        } else {
+          // 4-hour intervals: show abbreviated
+          return d.date.split(" ")[0];
+        }
+      });
+
+      charts.requests = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Requests",
+            data: data.map((d) => d.count),
+            borderColor: "#6366f1",
+            backgroundColor: "rgba(99, 102, 241, 0.1)",
+            tension: 0.4,
+            fill: true,
+            borderWidth: 1.5,
+            pointRadius: 1,
+            pointBackgroundColor: "#6366f1",
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {display: false},
+            tooltip: {
+              callbacks: {
+                title: (context) => {
+                  const original = data[context[0].dataIndex];
+                  if (days === 1) return `Time: ${original.date}`;
+                  if (days <= 7) return `DateTime: ${original.date}`;
+                  return `Interval: ${original.date}`;
+                },
+                label: (context) => `Requests: ${context.parsed.y.toLocaleString()}`
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
+              },
+              grid: {color: 'rgba(0, 0, 0, 0.05)'},
+              ticks: {
+                maxTicksLimit: days === 1 ? 12 : 20,
+                maxRotation: 0,
+                minRotation: 0
+              }
+            },
+            y: {
+              title: {display: true, text: 'Requests'},
+              beginAtZero: true,
+              grid: {color: 'rgba(0, 0, 0, 0.05)'}
+            }
+          }
+        }
+      });
+    }
+
+    // Latency Over Time Chart
+    function updateLatencyChart(data, _isHourly) {
+      const ctx = document.getElementById("latencyChart").getContext("2d");
+      const days = parseInt(document.getElementById("daysSelect").value, 10);
+
+      if (charts.latency) charts.latency.destroy();
+
+      // Format labels based on granularity
+      const labels = data.map((d) => {
+        if (days === 1) {
+          // 15-minute intervals: show just time
+          return d.time.split(" ")[1] || d.time;
+        } else if (days <= 7) {
+          // Hourly: show date + hour
+          const parts = d.time.split(" ");
+          const date = parts[0].split("-")[2]; // Get day
+          const hour = parts[1] || "00:00";
+          return `${date} ${hour}`;
+        } else {
+          // 4-hour intervals: show abbreviated
+          return d.time.split(" ")[0];
+        }
+      });
+
+      // Calculate dynamic max for logarithmic scale
+      const responseTimes = data.map((d) => d.averageResponseTime);
+      const maxResponseTime = Math.max(...responseTimes);
+
+      // Calculate appropriate max for log scale (next power of 10)
+      const logMax = 10 ** Math.ceil(Math.log10(maxResponseTime));
+
+      // Generate dynamic tick values based on the data range
+      const generateLogTicks = (_min, max) => {
+        const ticks = [];
+        let current = 1;
+        while (current <= max) {
+          ticks.push(current);
+          current *= 10;
+        }
+        return ticks;
+      };
+
+      const dynamicTicks = generateLogTicks(1, logMax);
+
+      charts.latency = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: "Average Response Time",
+            data: responseTimes,
+            borderColor: "#10b981",
+            backgroundColor: "rgba(16, 185, 129, 0.1)",
+            tension: 0.4,
+            fill: true,
+            borderWidth: 1.5,
+            pointRadius: 1,
+            pointBackgroundColor: "#10b981",
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {display: false},
+            tooltip: {
+              callbacks: {
+                title: (context) => {
+                  const original = data[context[0].dataIndex];
+                  if (days === 1) return `Time: ${original.time}`;
+                  if (days <= 7) return `DateTime: ${original.time}`;
+                  return `Interval: ${original.time}`;
+                },
+                label: (context) => {
+                  const point = data[context.dataIndex];
+                  return [
+                    `Response Time: ${Math.round(context.parsed.y)}ms`,
+                    `Request Count: ${point.count.toLocaleString()}`
+                  ];
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              title: {
+                display: true,
+                text: days === 1 ? 'Time (15min intervals)' : days <= 7 ? 'Time (hourly)' : 'Time (4hr intervals)'
+              },
+              grid: {color: 'rgba(0, 0, 0, 0.05)'},
+              ticks: {
+                maxTicksLimit: days === 1 ? 12 : 20,
+                maxRotation: 0,
+                minRotation: 0
+              }
+            },
+            y: {
+              type: 'logarithmic',
+              title: {display: true, text: 'Response Time (ms, log scale)'},
+              min: 1,
+              max: logMax,
+              grid: {color: 'rgba(0, 0, 0, 0.05)'},
+              ticks: {
+                callback: (value) => {
+                  // Show clean numbers based on dynamic range
+                  if (dynamicTicks.includes(value)) {
+                    return `${value}ms`;
+                  }
+                  return '';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // User Agents Table
+    let allUserAgents = [];
+
+    function updateUserAgentsTable(userAgents) {
+      allUserAgents = userAgents;
+      renderUserAgentsTable(userAgents);
+      setupUserAgentSearch();
+    }
+
+    function parseUserAgent(ua) {
+      // Keep strange/unique ones as-is
+      if (ua.length < 50 ||
+        !ua.includes('Mozilla/') ||
+        ua.includes('bot') ||
+        ua.includes('crawler') ||
+        ua.includes('spider') ||
+        !ua.includes('AppleWebKit') ||
+        ua.includes('Shiba-Arcade') ||
+        ua === 'node' ||
+        ua.includes('curl') ||
+        ua.includes('python') ||
+        ua.includes('PostmanRuntime')) {
+        return ua;
+      }
+
+      // Parse common browsers
+      const os = ua.includes('Macintosh') ? 'macOS' :
+        ua.includes('Windows NT 10.0') ? 'Windows 10' :
+          ua.includes('Windows NT') ? 'Windows' :
+            ua.includes('X11; Linux') ? 'Linux' :
+              ua.includes('iPhone') ? 'iOS' :
+                ua.includes('Android') ? 'Android' : 'Unknown OS';
+
+      // Detect browser and version
+      let browser = 'Unknown Browser';
+
+      if (ua.includes('Edg/')) {
+        const match = ua.match(/Edg\/(\d+\.\d+)/);
+        const version = match ? match[1] : '';
+        browser = `Edge ${version}`;
+      } else if (ua.includes('Chrome/')) {
+        const match = ua.match(/Chrome\/(\d+\.\d+)/);
+        const version = match ? match[1] : '';
+        browser = `Chrome ${version}`;
+      } else if (ua.includes('Firefox/')) {
+        const match = ua.match(/Firefox\/(\d+\.\d+)/);
+        const version = match ? match[1] : '';
+        browser = `Firefox ${version}`;
+      } else if (ua.includes('Safari/') && !ua.includes('Chrome')) {
+        browser = 'Safari';
+      }
+
+      return `${browser} (${os})`;
+    }
+
+    function renderUserAgentsTable(userAgents) {
+      const container = document.getElementById("userAgentsTable");
+
+      if (userAgents.length === 0) {
+        container.innerHTML = '<div class="no-results">No user agents found</div>';
+        return;
+      }
+
+      const totalRequests = userAgents.reduce((sum, ua) => sum + ua.count, 0);
+
+      const tableHTML = `
           <table class="ua-table">
             <thead>
               <tr>
@@ -843,10 +849,10 @@
             </thead>
             <tbody>
               ${userAgents.map(ua => {
-                const displayName = parseUserAgent(ua.userAgent);
-                const percentage = ((ua.count / totalRequests) * 100).toFixed(1);
+        const displayName = parseUserAgent(ua.userAgent);
+        const percentage = ((ua.count / totalRequests) * 100).toFixed(1);
 
-                return `
+        return `
                   <tr>
                     <td>
                       <div class="ua-name">${displayName}</div>
@@ -856,58 +862,59 @@
                     <td class="ua-percentage">${percentage}%</td>
                   </tr>
                 `;
-              }).join('')}
+      }).join('')}
             </tbody>
           </table>
         `;
 
-        container.innerHTML = tableHTML;
-      }
+      container.innerHTML = tableHTML;
+    }
 
-      function setupUserAgentSearch() {
-        const searchInput = document.getElementById('userAgentSearch');
+    function setupUserAgentSearch() {
+      const searchInput = document.getElementById('userAgentSearch');
 
-        searchInput.addEventListener('input', function() {
-          const searchTerm = this.value.toLowerCase().trim();
+      searchInput.addEventListener('input', function () {
+        const searchTerm = this.value.toLowerCase().trim();
 
-          if (searchTerm === '') {
-            renderUserAgentsTable(allUserAgents);
-            return;
-          }
+        if (searchTerm === '') {
+          renderUserAgentsTable(allUserAgents);
+          return;
+        }
 
-          const filtered = allUserAgents.filter(ua => {
-            const displayName = parseUserAgent(ua.userAgent).toLowerCase();
-            const rawUA = ua.userAgent.toLowerCase();
-            return displayName.includes(searchTerm) || rawUA.includes(searchTerm);
-          });
-
-          renderUserAgentsTable(filtered);
+        const filtered = allUserAgents.filter(ua => {
+          const displayName = parseUserAgent(ua.userAgent).toLowerCase();
+          const rawUA = ua.userAgent.toLowerCase();
+          return displayName.includes(searchTerm) || rawUA.includes(searchTerm);
         });
-      }
 
-      // Event Handlers
-      document.getElementById("autoRefresh").addEventListener("change", function () {
-        if (this.checked) {
-          autoRefreshInterval = setInterval(loadData, 30000);
-        } else {
-          clearInterval(autoRefreshInterval);
+        renderUserAgentsTable(filtered);
+      });
+    }
+
+    // Event Handlers
+    document.getElementById("autoRefresh").addEventListener("change", function () {
+      if (this.checked) {
+        autoRefreshInterval = setInterval(loadData, 30000);
+      } else {
+        clearInterval(autoRefreshInterval);
+      }
+    });
+
+    document.getElementById("daysSelect").addEventListener("change", loadData);
+
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', loadData);
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      clearInterval(autoRefreshInterval);
+      Object.values(charts).forEach(chart => {
+        if (chart && typeof chart.destroy === 'function') {
+          chart.destroy();
         }
       });
+    });
+  </script>
+</body>
 
-      document.getElementById("daysSelect").addEventListener("change", loadData);
-
-      // Initialize dashboard
-      document.addEventListener('DOMContentLoaded', loadData);
-
-      // Cleanup on page unload
-      window.addEventListener('beforeunload', () => {
-        clearInterval(autoRefreshInterval);
-        Object.values(charts).forEach(chart => {
-          if (chart && typeof chart.destroy === 'function') {
-            chart.destroy();
-          }
-        });
-      });
-    </script>
-  </body>
 </html>
