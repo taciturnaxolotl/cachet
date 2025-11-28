@@ -32,7 +32,7 @@ jobs:
             git fetch --all
             git reset --hard origin/main
             bun install
-            sudo systemctl restart cachet.service
+            sudo /run/current-system/sw/bin/systemctl restart cachet.service
           EOF
       
       - name: Wait for service to start
