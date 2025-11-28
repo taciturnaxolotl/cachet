@@ -710,7 +710,7 @@ class Cache {
 			status = "unhealthy";
 		} else if (!checks.slackApi.status || checks.queueDepth > 100) {
 			status = "degraded";
-		} else if (checks.memoryUsage.percentage > 90) {
+		} else if (checks.memoryUsage.percentage >= 100) {
 			status = "degraded";
 		}
 
