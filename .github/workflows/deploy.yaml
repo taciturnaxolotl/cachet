@@ -1,13 +1,17 @@
+name: Deploy Cachet
+
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      
       - name: Setup Tailscale
         uses: tailscale/github-action@v3
         with:
@@ -15,18 +19,20 @@ jobs:
           oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
           use-cache: "true"
+      
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
           echo "StrictHostKeyChecking no" >> ~/.ssh/config
+      
       - name: Deploy to server
         run: |
-          ssh kierank@ember << 'EOF'
-            cd ~/cachet
+          ssh cachet@terebithia << 'EOF'
+            cd /var/lib/cachet/app
             git fetch --all
             git reset --hard origin/main
-            ~/.bun/bin/bun install
-            sudo /usr/bin/systemctl restart cachet.service
+            bun install
+            sudo systemctl restart cachet.service
           EOF
       
       - name: Wait for service to start
