@@ -12,7 +12,7 @@
 		"@tqman/nice-logger": "^1.0.7",
 		"@types/node-cron": "^3.0.11",
 		"bottleneck": "^2.19.5",
-		"elysia": "1.1.26",
+		"elysia": "1.4.18",
 		"node-cron": "^3.0.3",
 		"sentry": "^0.1.2"
 	},
