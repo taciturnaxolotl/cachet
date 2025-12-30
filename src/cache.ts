@@ -443,6 +443,15 @@ class Cache {
 			) WITHOUT ROWID
 		`);
 
+		// Create referer stats table
+		this.db.run(`
+			CREATE TABLE IF NOT EXISTS referer_stats (
+				referer_host TEXT PRIMARY KEY,
+				hits INTEGER NOT NULL DEFAULT 1,
+				last_seen INTEGER NOT NULL
+			) WITHOUT ROWID
+		`);
+
 		// Create indexes for time-range queries
 		this.db.run(
 			"CREATE INDEX IF NOT EXISTS idx_traffic_10min_bucket ON traffic_10min(bucket)",
@@ -455,6 +464,9 @@ class Cache {
 		);
 		this.db.run(
 			"CREATE INDEX IF NOT EXISTS idx_user_agent_hits ON user_agent_stats(hits DESC)",
+		);
+		this.db.run(
+			"CREATE INDEX IF NOT EXISTS idx_referer_hits ON referer_stats(hits DESC)",
 		);
 
 		// Enable WAL mode for better concurrent performance
@@ -1042,6 +1054,7 @@ class Cache {
 	 * @param userAgent User agent string
 	 * @param ipAddress IP address of the client (unused, kept for API compatibility)
 	 * @param responseTime Response time in milliseconds
+	 * @param referer Referer header value
 	 */
 	async recordRequest(
 		endpoint: string,
@@ -1050,6 +1063,7 @@ class Cache {
 		userAgent?: string,
 		_ipAddress?: string,
 		responseTime?: number,
+		referer?: string,
 	): Promise<void> {
 		try {
 			const now = Math.floor(Date.now() / 1000);
@@ -1096,6 +1110,25 @@ class Cache {
 					 	last_seen = MAX(last_seen, ?2)`,
 					[userAgent, Date.now()],
 				);
+			}
+
+			// Track referer (extract host only)
+			if (referer) {
+				try {
+					const refererHost = new URL(referer).host;
+					if (refererHost) {
+						this.db.run(
+							`INSERT INTO referer_stats (referer_host, hits, last_seen)
+							 VALUES (?1, 1, ?2)
+							 ON CONFLICT(referer_host) DO UPDATE SET 
+							 	hits = hits + 1,
+							 	last_seen = MAX(last_seen, ?2)`,
+							[refererHost, Date.now()],
+						);
+					}
+				} catch {
+					// Invalid URL, skip
+				}
 			}
 		} catch (error) {
 			console.error("Error recording request analytics:", error);
@@ -1795,6 +1828,26 @@ class Cache {
 		this.typedAnalyticsCache.setUserAgentData(cacheKey, topUserAgents);
 
 		return topUserAgents;
+	}
+
+	/**
+	 * Gets referer stats from cumulative stats table
+	 * @returns Referer host data sorted by hits
+	 */
+	async getReferers(): Promise<Array<{ refererHost: string; hits: number }>> {
+		const results = this.db
+			.query(
+				`
+				SELECT referer_host as refererHost, hits
+				FROM referer_stats
+				WHERE referer_host IS NOT NULL
+				ORDER BY hits DESC
+				LIMIT 50
+				`,
+			)
+			.all() as Array<{ refererHost: string; hits: number }>;
+
+		return results;
 	}
 }
 

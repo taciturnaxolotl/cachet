@@ -212,6 +212,15 @@
       font-weight: 600;
     }
 
+    .section-subtitle {
+      color: #8b949e;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+      margin-top: 1rem;
+    }
+
     .last-updated {
       color: #6e7681;
       font-size: 0.75rem;
@@ -238,6 +247,8 @@
     .ua-tag-count {
       color: #8b949e;
     }
+
+
 
     .search-input {
       width: 100%;
@@ -387,6 +398,7 @@
         <div class="last-updated" id="lastUpdated"></div>
       </div>
       <div class="ua-summary" id="uaSummary"></div>
+      <div class="section-subtitle">Referers & Non-Browser Clients</div>
       <input type="text" class="search-input" id="uaSearch" placeholder="Search user agents...">
       <div class="ua-list" id="uaList"></div>
     </div>
@@ -696,10 +708,11 @@
 
       try {
         // Fetch stats and traffic in parallel
-        const [statsRes, trafficData, uaRes] = await Promise.all([
+        const [statsRes, trafficData, uaRes, refRes] = await Promise.all([
           fetch(`/stats/essential?days=${currentDays}`),
           fetchTrafficData(),
-          fetch('/stats/useragents')
+          fetch('/stats/useragents'),
+          fetch('/stats/referers')
         ]);
 
         // If traffic fetch was superseded, don't update
@@ -710,6 +723,7 @@
 
         const stats = await statsRes.json();
         const userAgents = await uaRes.json();
+        const referers = await refRes.json();
 
         // Update stats cards
         document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
@@ -721,9 +735,9 @@
         currentTrafficData = trafficData;
         initChart(trafficData);
 
-        // Update user agents
+        // Update user agents and referers
         allUserAgents = userAgents;
-        renderUserAgents(userAgents);
+        renderTrafficSources(userAgents, referers);
         updateLastUpdated();
 
       } catch (e) {
@@ -733,20 +747,20 @@
       }
     }
 
-    // User agents
-    function renderUserAgents(agents, showSummary = true) {
+    // Traffic sources
+    let currentReferers = [];
+    
+    function renderTrafficSources(agents, referers, showSummary = true) {
       const list = document.getElementById('uaList');
       const summaryEl = document.getElementById('uaSummary');
       
-      if (!agents || agents.length === 0) {
-        list.innerHTML = '<div style="color: #8b949e; padding: 1rem 0;">No user agents found</div>';
-        summaryEl.innerHTML = '';
-        return;
+      if (referers) {
+        currentReferers = referers;
       }
-
-      // Render summary (only for full list, not filtered)
+      
+      // Render summary (browsers and OSes only)
       if (showSummary) {
-        const summary = computeUASummary(agents);
+        const summary = computeUASummary(agents || []);
         const tags = [
           ...summary.browsers.map(([name, count]) => 
             `<span class="ua-tag">${name} <span class="ua-tag-count">${formatNumber(count)}</span></span>`
@@ -759,22 +773,49 @@
       }
 
       // Filter out standard browsers, keep bots/CLI/social/other
-      const nonBrowserAgents = agents.filter(ua => {
+      const nonBrowserAgents = (agents || []).filter(ua => {
         const { type } = classifyUserAgent(ua.userAgent);
         return type !== 'browser';
-      });
+      }).map(ua => ({
+        type: 'ua',
+        name: ua.userAgent?.length > 60 ? ua.userAgent.substring(0, 57) + '...' : (ua.userAgent || 'Unknown'),
+        full: ua.userAgent,
+        hits: ua.hits || ua.count || 0
+      }));
 
-      list.innerHTML = nonBrowserAgents.slice(0, 50).map((ua, i) => {
+      // Add referers as entries
+      const refererEntries = currentReferers.map(ref => ({
+        type: 'referer',
+        name: ref.refererHost,
+        full: ref.refererHost,
+        hits: ref.hits
+      }));
+
+      // Merge and sort by hits
+      const combined = [...nonBrowserAgents, ...refererEntries]
+        .sort((a, b) => b.hits - a.hits)
+        .slice(0, 50);
+
+      if (combined.length === 0) {
+        list.innerHTML = '<div style="color: #8b949e; padding: 1rem 0;">No traffic sources tracked yet</div>';
+        return;
+      }
+
+      list.innerHTML = combined.map((item, i) => {
         const rankClass = i < 3 ? `top-${i + 1}` : '';
-        const display = ua.userAgent?.length > 60 ? ua.userAgent.substring(0, 57) + '...' : (ua.userAgent || 'Unknown');
         return `
           <div class="ua-item">
             <span class="ua-rank ${rankClass}">${i + 1}</span>
-            <span class="ua-name" title="${ua.userAgent}">${display}</span>
-            <span class="ua-count">${formatNumber(ua.hits || ua.count)}</span>
+            <span class="ua-name" title="${item.full}">${item.name}</span>
+            <span class="ua-count">${formatNumber(item.hits)}</span>
           </div>
         `;
-      }).join('') || '<div style="color: #8b949e; padding: 1rem 0;">No non-browser agents found</div>';
+      }).join('');
+    }
+    
+    // Backwards compat alias
+    function renderUserAgents(agents, showSummary = true) {
+      renderTrafficSources(agents, null, showSummary);
     }
 
     // Event listeners
@@ -831,14 +872,16 @@
         Promise.all([
           fetch(`/stats/essential?days=${currentDays}`),
           fetchTrafficData(currentZoom.start, currentZoom.end),
-          fetch('/stats/useragents')
-        ]).then(async ([statsRes, trafficData, uaRes]) => {
+          fetch('/stats/useragents'),
+          fetch('/stats/referers')
+        ]).then(async ([statsRes, trafficData, uaRes, refRes]) => {
           if (trafficData === null) {
             showLoading(false);
             return;
           }
           const stats = await statsRes.json();
           const userAgents = await uaRes.json();
+          const referers = await refRes.json();
           
           document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
           document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
@@ -848,7 +891,7 @@
           currentTrafficData = trafficData;
           initChart(trafficData);
           allUserAgents = userAgents;
-          renderUserAgents(userAgents);
+          renderTrafficSources(userAgents, referers);
           updateLastUpdated();
           showLoading(false);
         });

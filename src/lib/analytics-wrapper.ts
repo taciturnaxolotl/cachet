@@ -30,6 +30,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 					request.headers.get("x-forwarded-for") ||
 					request.headers.get("x-real-ip") ||
 					"unknown";
+				const referer = request.headers.get("referer") || undefined;
 
 				// Use the actual request URL for dynamic paths, fallback to provided path
 				const analyticsPath = path.includes(":") ? request.url : path;
@@ -41,6 +42,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 					userAgent,
 					ipAddress,
 					Date.now() - startTime,
+					referer,
 				);
 			};
 

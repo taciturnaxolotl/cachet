@@ -293,6 +293,15 @@ export const handleGetUserAgents: RouteHandlerWithAnalytics = async (
 	return Response.json(userAgents);
 };
 
+export const handleGetReferers: RouteHandlerWithAnalytics = async (
+	_request,
+	recordAnalytics,
+) => {
+	const referers = await cache.getReferers();
+	await recordAnalytics(200);
+	return Response.json(referers);
+};
+
 export const handleGetTraffic: RouteHandlerWithAnalytics = async (
 	request,
 	recordAnalytics,

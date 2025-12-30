@@ -547,5 +547,28 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				},
 			),
 		},
+
+		"/stats/referers": {
+			GET: createRoute(
+				withAnalytics("/stats/referers", "GET", handlers.handleGetReferers),
+				{
+					summary: "Get referer sources",
+					description: "Cumulative referer host statistics showing traffic sources",
+					tags: ["Analytics"],
+					responses: Object.fromEntries([
+						apiResponse(200, "Referers retrieved", {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									refererHost: { type: "string" },
+									hits: { type: "number" },
+								},
+							},
+						}),
+					]),
+				},
+			),
+		},
 	};
 }
