@@ -60,6 +60,32 @@
       gap: 0.5rem;
     }
 
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 1rem;
+      font-size: 0.8125rem;
+      color: #8b949e;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
     .dashboard {
       max-width: 1200px;
       margin: 0 auto;
@@ -308,7 +334,13 @@
     </div>
 
     <div class="chart-container">
-      <div class="chart-title">Requests Over Time</div>
+      <div class="chart-header">
+        <div class="chart-title">Traffic Over Time</div>
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:#238636"></span>Requests</span>
+          <span class="legend-item"><span class="legend-dot" style="background:rgba(249, 115, 22, 0.5)"></span>Latency</span>
+        </div>
+      </div>
       <div id="traffic-chart" role="img" aria-label="Traffic chart"></div>
       <div class="chart-hint">Drag to zoom • Double-click to reset</div>
       <div class="loading-overlay hidden" id="chartLoading">
@@ -327,6 +359,7 @@
     // State
     let currentDays = 7;
     let chart = null;
+    let currentTrafficData = [];
     let allUserAgents = [];
     let abortController = null;
 
@@ -381,9 +414,10 @@
         return;
       }
 
-      // Transform data for uPlot
+      // Transform data for uPlot - both series
       const timestamps = data.map(d => d.bucket);
       const hits = data.map(d => d.hits);
+      const latency = data.map(d => d.avgLatency ?? 0);
 
       const minSpan = 1.5 * 86400; // 1.5 days minimum zoom
 
@@ -412,7 +446,8 @@
               return [min, max];
             }
           },
-          y: { auto: true, range: (u, min, max) => [0, max * 1.1] }
+          y: { auto: true, range: (u, min, max) => [0, max * 1.1] },
+          latency: { auto: true, range: (u, min, max) => [0, max * 1.1] }
         },
         axes: [
           {
@@ -422,20 +457,40 @@
             font: '11px system-ui',
           },
           {
-            stroke: '#8b949e',
+            scale: 'y',
+            stroke: '#238636',
             grid: { stroke: '#21262d', width: 1 },
             ticks: { stroke: '#30363d', width: 1 },
             font: '11px system-ui',
             values: (u, vals) => vals.map(v => formatNumber(v)),
+          },
+          {
+            side: 1,
+            scale: 'latency',
+            stroke: '#f97316',
+            grid: { show: false },
+            ticks: { stroke: '#30363d', width: 1 },
+            font: '11px system-ui',
+            values: (u, vals) => vals.map(v => formatMs(v)),
           }
         ],
         series: [
           {},
           {
             label: 'Requests',
+            scale: 'y',
             stroke: '#238636',
             width: 2,
             fill: 'rgba(35, 134, 54, 0.1)',
+            points: { fill: '#238636', stroke: '#238636' },
+          },
+          {
+            label: 'Latency',
+            scale: 'latency',
+            stroke: 'rgba(249, 115, 22, 0.5)',
+            width: 1,
+            fill: 'rgba(249, 115, 22, 0.1)',
+            points: { fill: 'rgba(249, 115, 22, 0.5)', stroke: 'rgba(249, 115, 22, 0.5)' },
           }
         ],
         hooks: {
@@ -452,7 +507,7 @@
         }
       };
 
-      chart = new uPlot(opts, [timestamps, hits], container);
+      chart = new uPlot(opts, [timestamps, hits, latency], container);
 
       // Double-click to reset zoom
       container.addEventListener('dblclick', () => {
@@ -474,6 +529,7 @@
       showLoading(true);
       fetchTrafficData(minTime, maxTime).then(data => {
         if (data !== null) {
+          currentTrafficData = data;
           initChart(data);
         }
         showLoading(false);
@@ -544,6 +600,7 @@
         document.getElementById('uniqueAgents').textContent = formatNumber(userAgents.length || 0);
 
         // Update chart
+        currentTrafficData = trafficData;
         initChart(trafficData);
 
         // Update user agents

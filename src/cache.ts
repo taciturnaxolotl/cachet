@@ -1602,10 +1602,10 @@ class Cache {
 			)
 			.get(alignedCutoff) as { count: number | null };
 
-		// Average response time from bucket table
+		// Average response time from bucket table (exclude zero-response buckets from migration)
 		const avgResponseResult = this.db
 			.query(
-				`SELECT SUM(total_response_time) as totalTime, SUM(hits) as totalHits FROM ${table} WHERE bucket >= ? AND endpoint != '/stats'`,
+				`SELECT SUM(total_response_time) as totalTime, SUM(hits) as totalHits FROM ${table} WHERE bucket >= ? AND endpoint != '/stats' AND total_response_time > 0`,
 			)
 			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
 
@@ -1712,13 +1712,13 @@ class Cache {
 	/**
 	 * Gets traffic data for charts with adaptive granularity
 	 * @param options - Either days for relative range, or start/end for absolute range
-	 * @returns Array of bucket data points
+	 * @returns Array of bucket data points with hits and latency
 	 */
 	getTraffic(options: {
 		days?: number;
 		startTime?: number;
 		endTime?: number;
-	} = {}): Array<{ bucket: number; hits: number }> {
+	} = {}): Array<{ bucket: number; hits: number; avgLatency: number | null }> {
 		const now = Math.floor(Date.now() / 1000);
 		let start: number;
 		let end: number;
@@ -1739,16 +1739,29 @@ class Cache {
 		const results = this.db
 			.query(
 				`
-				SELECT bucket, SUM(hits) as hits
+				SELECT 
+					bucket, 
+					SUM(hits) as hits,
+					SUM(CASE WHEN total_response_time > 0 THEN total_response_time ELSE 0 END) as totalTime,
+					SUM(CASE WHEN total_response_time > 0 THEN hits ELSE 0 END) as hitsWithTime
 				FROM ${table}
 				WHERE bucket >= ? AND bucket <= ? AND endpoint != '/stats'
 				GROUP BY bucket
 				ORDER BY bucket ASC
 			`,
 			)
-			.all(alignedStart, end) as Array<{ bucket: number; hits: number }>;
+			.all(alignedStart, end) as Array<{ 
+				bucket: number; 
+				hits: number; 
+				totalTime: number;
+				hitsWithTime: number;
+			}>;
 
-		return results;
+		return results.map(r => ({
+			bucket: r.bucket,
+			hits: r.hits,
+			avgLatency: r.hitsWithTime > 0 ? r.totalTime / r.hitsWithTime : null,
+		}));
 	}
 
 	/**
