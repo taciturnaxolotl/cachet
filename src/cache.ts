@@ -1710,13 +1710,55 @@ class Cache {
 	}
 
 	/**
+	 * Gets traffic data for charts with adaptive granularity
+	 * @param options - Either days for relative range, or start/end for absolute range
+	 * @returns Array of bucket data points
+	 */
+	getTraffic(options: {
+		days?: number;
+		startTime?: number;
+		endTime?: number;
+	} = {}): Array<{ bucket: number; hits: number }> {
+		const now = Math.floor(Date.now() / 1000);
+		let start: number;
+		let end: number;
+
+		if (options.startTime && options.endTime) {
+			start = options.startTime;
+			end = options.endTime;
+		} else {
+			const days = options.days || 7;
+			start = now - days * 24 * 60 * 60;
+			end = now;
+		}
+
+		const spanDays = (end - start) / 86400;
+		const { table, bucketSize } = this.selectBucketTable(spanDays);
+		const alignedStart = start - (start % bucketSize);
+
+		const results = this.db
+			.query(
+				`
+				SELECT bucket, SUM(hits) as hits
+				FROM ${table}
+				WHERE bucket >= ? AND bucket <= ? AND endpoint != '/stats'
+				GROUP BY bucket
+				ORDER BY bucket ASC
+			`,
+			)
+			.all(alignedStart, end) as Array<{ bucket: number; hits: number }>;
+
+		return results;
+	}
+
+	/**
 	 * Gets user agents data from cumulative stats table
 	 * @param _days Unused - user_agent_stats is cumulative
 	 * @returns User agents data
 	 */
 	async getUserAgents(
 		_days: number = 7,
-	): Promise<Array<{ userAgent: string; count: number }>> {
+	): Promise<Array<{ userAgent: string; hits: number }>> {
 		const cacheKey = "useragents_all";
 		const cached = this.typedAnalyticsCache.getUserAgentData(cacheKey);
 
@@ -1728,14 +1770,14 @@ class Cache {
 		const topUserAgents = this.db
 			.query(
 				`
-         SELECT user_agent as userAgent, hits as count
+         SELECT user_agent as userAgent, hits
          FROM user_agent_stats
          WHERE user_agent IS NOT NULL
          ORDER BY hits DESC
          LIMIT 50
        `,
 			)
-			.all() as Array<{ userAgent: string; count: number }>;
+			.all() as Array<{ userAgent: string; hits: number }>;
 
 		this.typedAnalyticsCache.setUserAgentData(cacheKey, topUserAgents);
 

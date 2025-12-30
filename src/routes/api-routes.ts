@@ -396,19 +396,8 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				{
 					summary: "Get user agents statistics",
 					description:
-						"List of user agents accessing the service with request counts",
+						"Cumulative list of user agents accessing the service with hit counts",
 					tags: ["Analytics"],
-					parameters: {
-						query: [
-							queryParam(
-								"days",
-								"number",
-								"Number of days to analyze",
-								false,
-								7,
-							),
-						],
-					},
 					responses: Object.fromEntries([
 						apiResponse(200, "User agents data retrieved successfully", {
 							type: "array",
@@ -416,7 +405,58 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 								type: "object",
 								properties: {
 									userAgent: { type: "string", example: "Mozilla/5.0..." },
-									count: { type: "number", example: 123 },
+									hits: { type: "number", example: 123 },
+								},
+							},
+						}),
+					]),
+				},
+			),
+		},
+
+		"/stats/traffic": {
+			GET: createRoute(
+				withAnalytics("/stats/traffic", "GET", handlers.handleGetTraffic),
+				{
+					summary: "Get traffic time-series data",
+					description:
+						"Returns bucketed traffic data with adaptive granularity based on time range",
+					tags: ["Analytics"],
+					parameters: {
+						query: [
+							queryParam(
+								"days",
+								"number",
+								"Number of days to look back (default: 7)",
+								false,
+								7,
+							),
+							queryParam(
+								"start",
+								"number",
+								"Start timestamp in seconds (use with end)",
+								false,
+							),
+							queryParam(
+								"end",
+								"number",
+								"End timestamp in seconds (use with start)",
+								false,
+							),
+						],
+					},
+					responses: Object.fromEntries([
+						apiResponse(200, "Traffic data retrieved successfully", {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									bucket: {
+										type: "number",
+										example: 1704067200,
+										description: "Unix timestamp of bucket start",
+									},
+									hits: { type: "number", example: 42 },
 								},
 							},
 						}),
@@ -452,6 +492,55 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 								averageResponseTime: { type: "number" },
 								chartData: { type: "array" },
 								userAgents: { type: "array" },
+							},
+						}),
+					]),
+				},
+			),
+		},
+
+		"/stats/essential": {
+			GET: createRoute(
+				withAnalytics("/stats/essential", "GET", handlers.handleGetEssentialStats),
+				{
+					summary: "Get essential stats",
+					description: "Fast-loading essential statistics for the dashboard",
+					tags: ["Analytics"],
+					parameters: {
+						query: [
+							queryParam("days", "number", "Number of days to analyze", false, 7),
+						],
+					},
+					responses: Object.fromEntries([
+						apiResponse(200, "Essential stats retrieved", {
+							type: "object",
+							properties: {
+								totalRequests: { type: "number" },
+								averageResponseTime: { type: "number" },
+								uptime: { type: "number" },
+							},
+						}),
+					]),
+				},
+			),
+		},
+
+		"/stats/useragents": {
+			GET: createRoute(
+				withAnalytics("/stats/useragents", "GET", handlers.handleGetUserAgents),
+				{
+					summary: "Get user agents",
+					description: "Cumulative user agent statistics",
+					tags: ["Analytics"],
+					responses: Object.fromEntries([
+						apiResponse(200, "User agents retrieved", {
+							type: "array",
+							items: {
+								type: "object",
+								properties: {
+									userAgent: { type: "string" },
+									hits: { type: "number" },
+								},
 							},
 						}),
 					]),

@@ -285,17 +285,37 @@ export const handleGetChartData: RouteHandlerWithAnalytics = async (
 };
 
 export const handleGetUserAgents: RouteHandlerWithAnalytics = async (
+	_request,
+	recordAnalytics,
+) => {
+	const userAgents = await cache.getUserAgents();
+	await recordAnalytics(200);
+	return Response.json(userAgents);
+};
+
+export const handleGetTraffic: RouteHandlerWithAnalytics = async (
 	request,
 	recordAnalytics,
 ) => {
 	const url = new URL(request.url);
 	const params = new URLSearchParams(url.search);
-	const daysParam = params.get("days");
-	const days = daysParam ? parseInt(daysParam, 10) : 7;
 
-	const userAgents = await cache.getUserAgents(days);
+	const startParam = params.get("start");
+	const endParam = params.get("end");
+	const daysParam = params.get("days");
+
+	let options: { days?: number; startTime?: number; endTime?: number } = {};
+
+	if (startParam && endParam) {
+		options.startTime = parseInt(startParam, 10);
+		options.endTime = parseInt(endParam, 10);
+	} else {
+		options.days = daysParam ? parseInt(daysParam, 10) : 7;
+	}
+
+	const traffic = cache.getTraffic(options);
 	await recordAnalytics(200);
-	return Response.json(userAgents);
+	return Response.json(traffic);
 };
 
 export const handleGetStats: RouteHandlerWithAnalytics = async (
