@@ -199,11 +199,44 @@
       padding: 1.5rem;
     }
 
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
     .section-title {
       color: #f0f6fc;
       font-size: 1rem;
       font-weight: 600;
+    }
+
+    .last-updated {
+      color: #6e7681;
+      font-size: 0.75rem;
+    }
+
+    .ua-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
       margin-bottom: 1rem;
+    }
+
+    .ua-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.5rem;
+      background: #21262d;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      color: #c9d1d9;
+    }
+
+    .ua-tag-count {
+      color: #8b949e;
     }
 
     .search-input {
@@ -349,7 +382,11 @@
     </div>
 
     <div class="user-agents-section">
-      <div class="section-title">Top User Agents</div>
+      <div class="section-header">
+        <div class="section-title">Traffic Sources</div>
+        <div class="last-updated" id="lastUpdated"></div>
+      </div>
+      <div class="ua-summary" id="uaSummary"></div>
       <input type="text" class="search-input" id="uaSearch" placeholder="Search user agents...">
       <div class="ua-list" id="uaList"></div>
     </div>
@@ -403,27 +440,73 @@
       return `${(ms / 1000).toFixed(2)}s`;
     }
 
-    function parseUserAgent(ua) {
-      if (!ua) return 'Unknown';
-      if (ua.length < 50 || !ua.includes('Mozilla/') || ua.includes('bot') || ua.includes('curl')) {
-        return ua.length > 60 ? ua.substring(0, 57) + '...' : ua;
+    function classifyUserAgent(ua) {
+      if (!ua) return { browser: 'Unknown', os: 'Unknown', type: 'unknown' };
+      
+      // Real browsers have Mozilla/5.0 and specific browser/engine identifiers
+      const isBrowser = ua.includes('Mozilla/5.0') && (
+        ua.includes('Chrome/') || 
+        ua.includes('Firefox/') || 
+        ua.includes('Safari/') || 
+        ua.includes('Edg/') ||
+        ua.includes('OPR/') ||
+        ua.includes('AppleWebKit/')
+      );
+      
+      if (!isBrowser) {
+        return { browser: 'Other', os: '-', type: 'other' };
       }
 
       const os = ua.includes('Macintosh') ? 'macOS' :
         ua.includes('Windows') ? 'Windows' :
-        ua.includes('Linux') ? 'Linux' :
-        ua.includes('iPhone') ? 'iOS' :
-        ua.includes('Android') ? 'Android' : '';
+        ua.includes('Linux') && !ua.includes('Android') ? 'Linux' :
+        ua.includes('iPhone') || ua.includes('iPad') ? 'iOS' :
+        ua.includes('Android') ? 'Android' : 'Other';
 
-      let browser = '';
+      let browser = 'Other';
       if (ua.includes('Edg/')) browser = 'Edge';
-      else if (ua.includes('Chrome/')) browser = 'Chrome';
+      else if (ua.includes('OPR/') || ua.includes('Opera')) browser = 'Opera';
+      else if (ua.includes('Chrome/') && !ua.includes('Edg/')) browser = 'Chrome';
       else if (ua.includes('Firefox/')) browser = 'Firefox';
       else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
 
-      if (browser && os) return `${browser} (${os})`;
-      if (browser) return browser;
+      return { browser, os, type: 'browser' };
+    }
+
+    function parseUserAgent(ua) {
+      const { browser, os, type } = classifyUserAgent(ua);
+      if (type !== 'browser') return browser;
+      if (browser !== 'Other' && os !== 'Other') return `${browser} (${os})`;
+      if (browser !== 'Other') return browser;
+      if (!ua) return 'Unknown';
       return ua.length > 60 ? ua.substring(0, 57) + '...' : ua;
+    }
+
+    function computeUASummary(agents) {
+      const browsers = {};
+      const oses = {};
+      const types = { browser: 0, bot: 0, cli: 0, social: 0, unknown: 0 };
+      
+      for (const agent of agents) {
+        const hits = agent.hits || agent.count || 1;
+        const { browser, os, type } = classifyUserAgent(agent.userAgent);
+        
+        browsers[browser] = (browsers[browser] || 0) + hits;
+        if (os !== '-') oses[os] = (oses[os] || 0) + hits;
+        types[type] = (types[type] || 0) + hits;
+      }
+      
+      return {
+        browsers: Object.entries(browsers).sort((a, b) => b[1] - a[1]).slice(0, 5),
+        oses: Object.entries(oses).sort((a, b) => b[1] - a[1]).slice(0, 4),
+        types
+      };
+    }
+
+    function updateLastUpdated() {
+      const el = document.getElementById('lastUpdated');
+      const now = new Date();
+      el.textContent = `Updated ${now.toLocaleTimeString()}`;
     }
 
     // Chart
@@ -641,6 +724,7 @@
         // Update user agents
         allUserAgents = userAgents;
         renderUserAgents(userAgents);
+        updateLastUpdated();
 
       } catch (e) {
         console.error('Error loading data:', e);
@@ -650,24 +734,47 @@
     }
 
     // User agents
-    function renderUserAgents(agents) {
+    function renderUserAgents(agents, showSummary = true) {
       const list = document.getElementById('uaList');
+      const summaryEl = document.getElementById('uaSummary');
       
       if (!agents || agents.length === 0) {
         list.innerHTML = '<div style="color: #8b949e; padding: 1rem 0;">No user agents found</div>';
+        summaryEl.innerHTML = '';
         return;
       }
 
-      list.innerHTML = agents.slice(0, 50).map((ua, i) => {
+      // Render summary (only for full list, not filtered)
+      if (showSummary) {
+        const summary = computeUASummary(agents);
+        const tags = [
+          ...summary.browsers.map(([name, count]) => 
+            `<span class="ua-tag">${name} <span class="ua-tag-count">${formatNumber(count)}</span></span>`
+          ),
+          ...summary.oses.map(([name, count]) => 
+            `<span class="ua-tag">${name} <span class="ua-tag-count">${formatNumber(count)}</span></span>`
+          )
+        ];
+        summaryEl.innerHTML = tags.join('');
+      }
+
+      // Filter out standard browsers, keep bots/CLI/social/other
+      const nonBrowserAgents = agents.filter(ua => {
+        const { type } = classifyUserAgent(ua.userAgent);
+        return type !== 'browser';
+      });
+
+      list.innerHTML = nonBrowserAgents.slice(0, 50).map((ua, i) => {
         const rankClass = i < 3 ? `top-${i + 1}` : '';
+        const display = ua.userAgent?.length > 60 ? ua.userAgent.substring(0, 57) + '...' : (ua.userAgent || 'Unknown');
         return `
           <div class="ua-item">
             <span class="ua-rank ${rankClass}">${i + 1}</span>
-            <span class="ua-name" title="${ua.userAgent}">${parseUserAgent(ua.userAgent)}</span>
+            <span class="ua-name" title="${ua.userAgent}">${display}</span>
             <span class="ua-count">${formatNumber(ua.hits || ua.count)}</span>
           </div>
         `;
-      }).join('');
+      }).join('') || '<div style="color: #8b949e; padding: 1rem 0;">No non-browser agents found</div>';
     }
 
     // Event listeners
@@ -685,14 +792,14 @@
     document.getElementById('uaSearch').addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
       if (!term) {
-        renderUserAgents(allUserAgents);
+        renderUserAgents(allUserAgents, true);
         return;
       }
       const filtered = allUserAgents.filter(ua => 
         ua.userAgent.toLowerCase().includes(term) ||
         parseUserAgent(ua.userAgent).toLowerCase().includes(term)
       );
-      renderUserAgents(filtered);
+      renderUserAgents(filtered, false);
     });
 
     // Handle resize
@@ -742,6 +849,7 @@
           initChart(trafficData);
           allUserAgents = userAgents;
           renderUserAgents(userAgents);
+          updateLastUpdated();
           showLoading(false);
         });
       } else {
