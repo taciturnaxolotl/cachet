@@ -540,7 +540,9 @@
       const hits = data.map(d => d.hits);
       const latency = data.map(d => d.avgLatency ?? 0);
 
-      const minSpan = 1.5 * 86400; // 1.5 days minimum zoom
+      // Minimum zoom based on current time range (or 2 hours for zoomed state)
+      const dataSpan = timestamps.length > 1 ? timestamps[timestamps.length - 1] - timestamps[0] : 86400;
+      const minSpan = Math.min(dataSpan, 2 * 3600); // At least 2 hours, but not more than data range
 
       const opts = {
         width: width,
@@ -643,7 +645,7 @@
     }
 
     function handleZoom(minTime, maxTime) {
-      const minSpan = 1.5 * 86400; // 1.5 days minimum
+      const minSpan = 2 * 3600; // 2 hours minimum zoom
       let span = maxTime - minTime;
       
       // Enforce minimum zoom
