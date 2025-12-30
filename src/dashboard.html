@@ -358,10 +358,36 @@
   <script>
     // State
     let currentDays = 7;
+    let currentZoom = null; // { start, end } when zoomed
     let chart = null;
+    let dblClickHandler = null;
     let currentTrafficData = [];
     let allUserAgents = [];
     let abortController = null;
+
+    // URL state management
+    function getStateFromURL() {
+      const params = new URLSearchParams(window.location.search);
+      const days = parseInt(params.get('days'));
+      const start = parseInt(params.get('start'));
+      const end = parseInt(params.get('end'));
+      
+      return {
+        days: days && [1, 7, 30, 90, 365].includes(days) ? days : 7,
+        zoom: start && end ? { start, end } : null
+      };
+    }
+
+    function updateURL() {
+      const params = new URLSearchParams();
+      params.set('days', currentDays);
+      if (currentZoom) {
+        params.set('start', currentZoom.start);
+        params.set('end', currentZoom.end);
+      }
+      const newURL = `${window.location.pathname}?${params.toString()}`;
+      history.replaceState(null, '', newURL);
+    }
 
     // Utilities
     function formatNumber(n) {
@@ -467,7 +493,7 @@
           {
             side: 1,
             scale: 'latency',
-            stroke: '#f97316',
+            stroke: 'rgba(249, 115, 22, 0.7)',
             grid: { show: false },
             ticks: { stroke: '#30363d', width: 1 },
             font: '11px system-ui',
@@ -509,10 +535,16 @@
 
       chart = new uPlot(opts, [timestamps, hits, latency], container);
 
-      // Double-click to reset zoom
-      container.addEventListener('dblclick', () => {
+      // Double-click to reset zoom (remove old handler first)
+      if (dblClickHandler) {
+        container.removeEventListener('dblclick', dblClickHandler);
+      }
+      dblClickHandler = () => {
+        currentZoom = null;
+        updateURL();
         loadData();
-      });
+      };
+      container.addEventListener('dblclick', dblClickHandler);
     }
 
     function handleZoom(minTime, maxTime) {
@@ -525,6 +557,9 @@
         minTime = Math.floor(center - minSpan / 2);
         maxTime = Math.floor(center + minSpan / 2);
       }
+
+      currentZoom = { start: Math.floor(minTime), end: Math.floor(maxTime) };
+      updateURL();
 
       showLoading(true);
       fetchTrafficData(minTime, maxTime).then(data => {
@@ -641,6 +676,8 @@
         document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentDays = parseInt(btn.dataset.days);
+        currentZoom = null; // Reset zoom when changing time range
+        updateURL();
         loadData();
       });
     });
@@ -671,7 +708,46 @@
     });
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', loadData);
+    document.addEventListener('DOMContentLoaded', () => {
+      const state = getStateFromURL();
+      currentDays = state.days;
+      currentZoom = state.zoom;
+      
+      // Update active button
+      document.querySelectorAll('.time-btn').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.days) === currentDays);
+      });
+      
+      // Load with zoom if present
+      if (currentZoom) {
+        showLoading(true);
+        Promise.all([
+          fetch(`/stats/essential?days=${currentDays}`),
+          fetchTrafficData(currentZoom.start, currentZoom.end),
+          fetch('/stats/useragents')
+        ]).then(async ([statsRes, trafficData, uaRes]) => {
+          if (trafficData === null) {
+            showLoading(false);
+            return;
+          }
+          const stats = await statsRes.json();
+          const userAgents = await uaRes.json();
+          
+          document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
+          document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
+          document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(1)}%` : '-';
+          document.getElementById('uniqueAgents').textContent = formatNumber(userAgents.length || 0);
+          
+          currentTrafficData = trafficData;
+          initChart(trafficData);
+          allUserAgents = userAgents;
+          renderUserAgents(userAgents);
+          showLoading(false);
+        });
+      } else {
+        loadData();
+      }
+    });
   </script>
 </body>
 
