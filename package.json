@@ -1,6 +1,6 @@
 {
   "name": "cachet",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "bun run --watch src/index.ts",

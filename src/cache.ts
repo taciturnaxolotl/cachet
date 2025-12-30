@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import { schedule } from "node-cron";
+import { bucketAnalyticsMigration } from "./migrations/bucketAnalyticsMigration";
 import { endpointGroupingMigration } from "./migrations/endpointGroupingMigration";
 import { logGroupingMigration } from "./migrations/logGroupingMigration";
 import { MigrationManager } from "./migrations/migrationManager";
@@ -399,61 +400,62 @@ class Cache {
       )
     `);
 
-		// Create request analytics table
+		// Create bucketed traffic tables (10-minute, hourly, daily)
 		this.db.run(`
-      CREATE TABLE IF NOT EXISTS request_analytics (
-        id TEXT PRIMARY KEY,
-        endpoint TEXT NOT NULL,
-        method TEXT NOT NULL,
-        status_code INTEGER NOT NULL,
-        user_agent TEXT,
-        ip_address TEXT,
-        timestamp INTEGER NOT NULL,
-        response_time INTEGER
-      )
-    `);
-
-		// Create index for faster queries
-		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_timestamp
-      ON request_analytics(timestamp)
-    `);
+			CREATE TABLE IF NOT EXISTS traffic_10min (
+				bucket INTEGER NOT NULL,
+				endpoint TEXT NOT NULL,
+				status_code INTEGER NOT NULL,
+				hits INTEGER NOT NULL DEFAULT 1,
+				total_response_time INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (bucket, endpoint, status_code)
+			) WITHOUT ROWID
+		`);
 
 		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_endpoint
-      ON request_analytics(endpoint)
-    `);
+			CREATE TABLE IF NOT EXISTS traffic_hourly (
+				bucket INTEGER NOT NULL,
+				endpoint TEXT NOT NULL,
+				status_code INTEGER NOT NULL,
+				hits INTEGER NOT NULL DEFAULT 1,
+				total_response_time INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (bucket, endpoint, status_code)
+			) WITHOUT ROWID
+		`);
 
 		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_status_timestamp
-      ON request_analytics(status_code, timestamp)
-    `);
+			CREATE TABLE IF NOT EXISTS traffic_daily (
+				bucket INTEGER NOT NULL,
+				endpoint TEXT NOT NULL,
+				status_code INTEGER NOT NULL,
+				hits INTEGER NOT NULL DEFAULT 1,
+				total_response_time INTEGER NOT NULL DEFAULT 0,
+				PRIMARY KEY (bucket, endpoint, status_code)
+			) WITHOUT ROWID
+		`);
 
+		// Create user agent stats table
 		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_response_time
-      ON request_analytics(response_time) WHERE response_time IS NOT NULL
-    `);
+			CREATE TABLE IF NOT EXISTS user_agent_stats (
+				user_agent TEXT PRIMARY KEY,
+				hits INTEGER NOT NULL DEFAULT 1,
+				last_seen INTEGER NOT NULL
+			) WITHOUT ROWID
+		`);
 
-		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_composite
-      ON request_analytics(timestamp, endpoint, status_code)
-    `);
-
-		// Additional performance indexes
-		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_user_agent
-      ON request_analytics(user_agent, timestamp) WHERE user_agent IS NOT NULL
-    `);
-
-		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_time_response
-      ON request_analytics(timestamp, response_time) WHERE response_time IS NOT NULL
-    `);
-
-		this.db.run(`
-      CREATE INDEX IF NOT EXISTS idx_request_analytics_exclude_stats
-      ON request_analytics(timestamp, endpoint, status_code) WHERE endpoint != '/stats'
-    `);
+		// Create indexes for time-range queries
+		this.db.run(
+			"CREATE INDEX IF NOT EXISTS idx_traffic_10min_bucket ON traffic_10min(bucket)",
+		);
+		this.db.run(
+			"CREATE INDEX IF NOT EXISTS idx_traffic_hourly_bucket ON traffic_hourly(bucket)",
+		);
+		this.db.run(
+			"CREATE INDEX IF NOT EXISTS idx_traffic_daily_bucket ON traffic_daily(bucket)",
+		);
+		this.db.run(
+			"CREATE INDEX IF NOT EXISTS idx_user_agent_hits ON user_agent_stats(hits DESC)",
+		);
 
 		// Enable WAL mode for better concurrent performance
 		this.db.run("PRAGMA journal_mode = WAL");
@@ -504,7 +506,11 @@ class Cache {
 			// Define migrations directly here to avoid circular dependencies
 			// Note: We define migrations both here and in migrations/index.ts
 			// This is intentional to prevent circular imports
-			const migrations = [endpointGroupingMigration, logGroupingMigration];
+			const migrations = [
+				endpointGroupingMigration,
+				logGroupingMigration,
+				bucketAnalyticsMigration,
+			];
 			const migrationManager = new MigrationManager(this.db, migrations);
 			const result = await migrationManager.runMigrations();
 
@@ -530,18 +536,10 @@ class Cache {
 			Date.now(),
 		]);
 
-		// Clean up old analytics data (older than 30 days) - moved to off-peak hours
-		const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-		const currentHour = new Date().getHours();
-		// Only run analytics cleanup during off-peak hours (2-6 AM)
-		if (currentHour >= 2 && currentHour < 6) {
-			this.db.run("DELETE FROM request_analytics WHERE timestamp < ?", [
-				thirtyDaysAgo,
-			]);
-			console.log(
-				`Analytics cleanup completed - removed records older than 30 days`,
-			);
-		}
+		// Clean up old 10-minute bucket data (older than 24 hours)
+		const oneDayAgoSec = Math.floor(Date.now() / 1000) - 86400;
+		const cleanupBucket = oneDayAgoSec - (oneDayAgoSec % 600);
+		this.db.run("DELETE FROM traffic_10min WHERE bucket < ?", [cleanupBucket]);
 
 		// Emojis are now updated on schedule, not on expiration
 		return result2.changes;
@@ -1037,46 +1035,125 @@ class Cache {
 	}
 
 	/**
-	 * Records a request for analytics
+	 * Records a request for analytics using bucketed time-series storage
 	 * @param endpoint The endpoint that was accessed
-	 * @param method HTTP method
+	 * @param method HTTP method (unused, kept for API compatibility)
 	 * @param statusCode HTTP status code
 	 * @param userAgent User agent string
-	 * @param ipAddress IP address of the client
+	 * @param ipAddress IP address of the client (unused, kept for API compatibility)
 	 * @param responseTime Response time in milliseconds
 	 */
 	async recordRequest(
 		endpoint: string,
-		method: string,
+		_method: string,
 		statusCode: number,
 		userAgent?: string,
-		ipAddress?: string,
+		_ipAddress?: string,
 		responseTime?: number,
 	): Promise<void> {
 		try {
-			const id = crypto.randomUUID();
+			const now = Math.floor(Date.now() / 1000);
+			const bucket10min = now - (now % 600);
+			const bucketHour = now - (now % 3600);
+			const bucketDay = now - (now % 86400);
+			const respTime = responseTime || 0;
+
+			// Upsert into all three bucket tables
 			this.db.run(
-				`INSERT INTO request_analytics
-         (id, endpoint, method, status_code, user_agent, ip_address, timestamp, response_time)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-				[
-					id,
-					endpoint,
-					method,
-					statusCode,
-					userAgent || null,
-					ipAddress || null,
-					Date.now(),
-					responseTime || null,
-				],
+				`INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
+				 VALUES (?1, ?2, ?3, 1, ?4)
+				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				 	hits = hits + 1,
+				 	total_response_time = total_response_time + ?4`,
+				[bucket10min, endpoint, statusCode, respTime],
 			);
+
+			this.db.run(
+				`INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
+				 VALUES (?1, ?2, ?3, 1, ?4)
+				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				 	hits = hits + 1,
+				 	total_response_time = total_response_time + ?4`,
+				[bucketHour, endpoint, statusCode, respTime],
+			);
+
+			this.db.run(
+				`INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
+				 VALUES (?1, ?2, ?3, 1, ?4)
+				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				 	hits = hits + 1,
+				 	total_response_time = total_response_time + ?4`,
+				[bucketDay, endpoint, statusCode, respTime],
+			);
+
+			// Track user agent
+			if (userAgent) {
+				this.db.run(
+					`INSERT INTO user_agent_stats (user_agent, hits, last_seen)
+					 VALUES (?1, 1, ?2)
+					 ON CONFLICT(user_agent) DO UPDATE SET 
+					 	hits = hits + 1,
+					 	last_seen = MAX(last_seen, ?2)`,
+					[userAgent, Date.now()],
+				);
+			}
 		} catch (error) {
 			console.error("Error recording request analytics:", error);
 		}
 	}
 
 	/**
-	 * Gets request analytics statistics with performance optimizations
+	 * Helper to select the appropriate bucket table based on time range
+	 */
+	private selectBucketTable(days: number): {
+		table: string;
+		bucketSize: number;
+	} {
+		if (days <= 1) {
+			return { table: "traffic_10min", bucketSize: 600 };
+		} else if (days <= 30) {
+			return { table: "traffic_hourly", bucketSize: 3600 };
+		} else {
+			return { table: "traffic_daily", bucketSize: 86400 };
+		}
+	}
+
+	/**
+	 * Helper to group endpoint names for display
+	 */
+	private groupEndpoint(endpoint: string): string {
+		if (endpoint === "/" || endpoint === "/dashboard") {
+			return "Dashboard";
+		} else if (endpoint === "/health") {
+			return "Health Check";
+		} else if (endpoint === "/swagger" || endpoint.startsWith("/swagger")) {
+			return "API Documentation";
+		} else if (endpoint === "/emojis") {
+			return "Emoji List";
+		} else if (endpoint.match(/^\/emojis\/[^/]+$/) || endpoint === "/emojis/EMOJI_NAME") {
+			return "Emoji Data";
+		} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/) || endpoint === "/emojis/EMOJI_NAME/r") {
+			return "Emoji Redirects";
+		} else if (endpoint.match(/^\/users\/[^/]+$/) || endpoint === "/users/USER_ID") {
+			return "User Data";
+		} else if (endpoint.match(/^\/users\/[^/]+\/r$/) || endpoint === "/users/USER_ID/r") {
+			return "User Redirects";
+		} else if (endpoint.match(/^\/users\/[^/]+\/purge$/) || endpoint === "/reset") {
+			return "Cache Management";
+		} else if (endpoint.includes("/users/") && endpoint.includes("/r")) {
+			return "User Redirects";
+		} else if (endpoint.includes("/users/")) {
+			return "User Data";
+		} else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
+			return "Emoji Redirects";
+		} else if (endpoint.includes("/emojis/")) {
+			return "Emoji Data";
+		}
+		return "Other";
+	}
+
+	/**
+	 * Gets request analytics statistics using bucketed time-series data
 	 * @param days Number of days to look back (default: 7)
 	 * @returns Analytics data
 	 */
@@ -1147,90 +1224,56 @@ class Cache {
 			total: number;
 		}>;
 	}> {
-		// Check cache first
 		const cacheKey = `analytics_${days}`;
 		const cached = this.typedAnalyticsCache.getAnalyticsData(cacheKey);
-
 		if (cached) {
 			return cached;
 		}
-		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+
+		const { table, bucketSize } = this.selectBucketTable(days);
+		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+		const alignedCutoff = cutoffBucket - (cutoffBucket % bucketSize);
 
 		// Total requests (excluding stats endpoint)
 		const totalResult = this.db
 			.query(
-				"SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND endpoint != '/stats'",
+				`SELECT SUM(hits) as count FROM ${table} WHERE bucket >= ? AND endpoint != '/stats'`,
 			)
-			.get(cutoffTime) as { count: number };
+			.get(alignedCutoff) as { count: number | null };
 
 		// Stats endpoint requests (tracked separately)
 		const statsResult = this.db
 			.query(
-				"SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND endpoint = '/stats'",
+				`SELECT SUM(hits) as count FROM ${table} WHERE bucket >= ? AND endpoint = '/stats'`,
 			)
-			.get(cutoffTime) as { count: number };
+			.get(alignedCutoff) as { count: number | null };
 
-		// Get raw endpoint data and group them intelligently (excluding stats)
+		// Get endpoint data from bucket table and group them
 		const rawEndpointResults = this.db
 			.query(
 				`
-         SELECT endpoint, COUNT(*) as count, AVG(response_time) as averageResponseTime
-         FROM request_analytics
-         WHERE timestamp > ? AND endpoint != '/stats'
+         SELECT endpoint, SUM(hits) as count, SUM(total_response_time) as totalTime, SUM(hits) as totalHits
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
          GROUP BY endpoint
          ORDER BY count DESC
        `,
 			)
-			.all(cutoffTime) as Array<{
+			.all(alignedCutoff) as Array<{
 			endpoint: string;
 			count: number;
-			averageResponseTime: number | null;
+			totalTime: number;
+			totalHits: number;
 		}>;
 
-		// Group endpoints intelligently
+		// Group endpoints using helper
 		const endpointGroups: Record<
 			string,
 			{ count: number; totalResponseTime: number; requestCount: number }
 		> = {};
 
 		for (const result of rawEndpointResults) {
-			const endpoint = result.endpoint;
-			let groupKey: string;
-
-			if (endpoint === "/" || endpoint === "/dashboard") {
-				groupKey = "Dashboard";
-			} else if (endpoint === "/health") {
-				groupKey = "Health Check";
-			} else if (endpoint === "/swagger" || endpoint.startsWith("/swagger")) {
-				groupKey = "API Documentation";
-			} else if (endpoint === "/emojis") {
-				groupKey = "Emoji List";
-			} else if (endpoint.match(/^\/emojis\/[^/]+$/)) {
-				groupKey = "Emoji Data";
-			} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-				groupKey = "Emoji Redirects";
-			} else if (endpoint.match(/^\/users\/[^/]+$/)) {
-				groupKey = "User Data";
-			} else if (endpoint.match(/^\/users\/[^/]+\/r$/)) {
-				groupKey = "User Redirects";
-			} else if (endpoint.match(/^\/users\/[^/]+\/purge$/)) {
-				groupKey = "Cache Management";
-			} else if (endpoint === "/reset") {
-				groupKey = "Cache Management";
-			} else {
-				// For any other endpoints, try to categorize them
-				if (endpoint.includes("/users/") && endpoint.includes("/r")) {
-					groupKey = "User Redirects";
-				} else if (endpoint.includes("/users/")) {
-					groupKey = "User Data";
-				} else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
-					groupKey = "Emoji Redirects";
-				} else if (endpoint.includes("/emojis/")) {
-					groupKey = "Emoji Data";
-				} else {
-					groupKey = "Other";
-				}
-			}
+			const groupKey = this.groupEndpoint(result.endpoint);
 
 			if (!endpointGroups[groupKey]) {
 				endpointGroups[groupKey] = {
@@ -1240,16 +1283,12 @@ class Cache {
 				};
 			}
 
-			// Defensive: Only update if groupKey exists (should always exist due to initialization above)
 			const group = endpointGroups[groupKey];
 			if (group) {
 				group.count += result.count;
-				if (
-					result.averageResponseTime !== null &&
-					result.averageResponseTime !== undefined
-				) {
-					group.totalResponseTime += result.averageResponseTime * result.count;
-					group.requestCount += result.count;
+				if (result.totalTime && result.totalHits > 0) {
+					group.totalResponseTime += result.totalTime;
+					group.requestCount += result.totalHits;
 				}
 			}
 		}
@@ -1266,376 +1305,144 @@ class Cache {
 			}))
 			.sort((a, b) => b.count - a.count);
 
-		// Requests by status code with average response time (excluding stats)
+		// Requests by status code from bucket table
 		const statusResultsRaw = this.db
 			.query(
 				`
-         SELECT status_code as status, COUNT(*) as count, AVG(response_time) as averageResponseTime
-         FROM request_analytics
-         WHERE timestamp > ? AND endpoint != '/stats'
+         SELECT status_code as status, SUM(hits) as count, SUM(total_response_time) as totalTime, SUM(hits) as totalHits
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
          GROUP BY status_code
          ORDER BY count DESC
        `,
 			)
-			.all(cutoffTime) as Array<{
+			.all(alignedCutoff) as Array<{
 			status: number;
 			count: number;
-			averageResponseTime: number | null;
+			totalTime: number;
+			totalHits: number;
 		}>;
 
 		const statusResults = statusResultsRaw.map((s) => ({
 			status: s.status,
 			count: s.count,
-			averageResponseTime: s.averageResponseTime ?? 0,
+			averageResponseTime: s.totalHits > 0 ? s.totalTime / s.totalHits : 0,
 		}));
 
-		// Requests over time - hourly for 1 day, daily for longer periods
-		let timeResults: Array<{
+		// Requests over time from bucket table
+		const timeResultsRaw = this.db
+			.query(
+				`
+         SELECT 
+           datetime(bucket, 'unixepoch') as date,
+           SUM(hits) as count,
+           SUM(total_response_time) as totalTime,
+           SUM(hits) as totalHits
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY bucket
+         ORDER BY bucket ASC
+       `,
+			)
+			.all(alignedCutoff) as Array<{
 			date: string;
 			count: number;
-			averageResponseTime: number;
+			totalTime: number;
+			totalHits: number;
 		}>;
 
-		if (days === 1) {
-			// 15-minute intervals for last 24 hours (excluding stats)
-			const intervalResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
+		const timeResults = timeResultsRaw.map((r) => ({
+			date: r.date,
+			count: r.count,
+			averageResponseTime: r.totalHits > 0 ? r.totalTime / r.totalHits : 0,
+		}));
 
-			timeResults = intervalResultsRaw.map((h) => ({
-				date: h.date,
-				count: h.count,
-				averageResponseTime: h.averageResponseTime ?? 0,
-			}));
-		} else if (days <= 7) {
-			// Hourly data for 7 days (excluding stats)
-			const hourResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
-
-			timeResults = hourResultsRaw.map((h) => ({
-				date: h.date,
-				count: h.count,
-				averageResponseTime: h.averageResponseTime ?? 0,
-			}));
-		} else {
-			// 4-hour intervals for longer periods (excluding stats)
-			const intervalResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
-
-			timeResults = intervalResultsRaw.map((d) => ({
-				date: d.date,
-				count: d.count,
-				averageResponseTime: d.averageResponseTime ?? 0,
-			}));
-		}
-
-		// Average response time (excluding stats)
+		// Average response time from bucket table
 		const avgResponseResult = this.db
 			.query(
 				`
-         SELECT AVG(response_time) as avg
-         FROM request_analytics
-         WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
+         SELECT SUM(total_response_time) as totalTime, SUM(hits) as totalHits
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
        `,
 			)
-			.get(cutoffTime) as { avg: number | null };
+			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
 
-		// Top user agents (raw strings, excluding stats) - optimized with index hint
+		const averageResponseTime =
+			avgResponseResult.totalHits && avgResponseResult.totalHits > 0
+				? (avgResponseResult.totalTime ?? 0) / avgResponseResult.totalHits
+				: null;
+
+		// Top user agents from user_agent_stats table (cumulative, no time filter)
 		const topUserAgents = this.db
 			.query(
 				`
-         SELECT user_agent as userAgent, COUNT(*) as count
-         FROM request_analytics INDEXED BY idx_request_analytics_user_agent
-         WHERE timestamp > ? AND user_agent IS NOT NULL AND endpoint != '/stats'
-         GROUP BY user_agent
-         ORDER BY count DESC
+         SELECT user_agent as userAgent, hits as count
+         FROM user_agent_stats
+         WHERE user_agent IS NOT NULL
+         ORDER BY hits DESC
          LIMIT 50
        `,
 			)
-			.all(cutoffTime) as Array<{ userAgent: string; count: number }>;
+			.all() as Array<{ userAgent: string; count: number }>;
 
-		// Enhanced Latency Analytics
-
-		// Get all response times for percentile calculations (excluding stats)
-		const responseTimes = this.db
-			.query(
-				`
-         SELECT response_time
-         FROM request_analytics
-         WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-         ORDER BY response_time
-       `,
-			)
-			.all(cutoffTime) as Array<{ response_time: number }>;
-
-		// Calculate percentiles
-		const calculatePercentile = (
-			arr: number[],
-			percentile: number,
-		): number | null => {
-			if (arr.length === 0) return null;
-			const index = Math.ceil((percentile / 100) * arr.length) - 1;
-			return arr[Math.max(0, index)] ?? 0;
-		};
-
-		const sortedTimes = responseTimes
-			.map((r) => r.response_time)
-			.sort((a, b) => a - b);
+		// Simplified latency analytics from bucket data
 		const percentiles = {
-			p50: calculatePercentile(sortedTimes, 50),
-			p75: calculatePercentile(sortedTimes, 75),
-			p90: calculatePercentile(sortedTimes, 90),
-			p95: calculatePercentile(sortedTimes, 95),
-			p99: calculatePercentile(sortedTimes, 99),
+			p50: null as number | null,
+			p75: null as number | null,
+			p90: null as number | null,
+			p95: null as number | null,
+			p99: null as number | null,
 		};
 
-		// Response time distribution
-		const totalWithResponseTime = responseTimes.length;
-		const distributionRanges = [
-			{ min: 0, max: 50, label: "0-50ms" },
-			{ min: 50, max: 100, label: "50-100ms" },
-			{ min: 100, max: 200, label: "100-200ms" },
-			{ min: 200, max: 500, label: "200-500ms" },
-			{ min: 500, max: 1000, label: "500ms-1s" },
-			{ min: 1000, max: 2000, label: "1-2s" },
-			{ min: 2000, max: 5000, label: "2-5s" },
-			{ min: 5000, max: Infinity, label: "5s+" },
-		];
+		const distribution: Array<{ range: string; count: number; percentage: number }> = [];
 
-		const distribution = distributionRanges.map((range) => {
-			const count = sortedTimes.filter(
-				(time) => time >= range.min && time < range.max,
-			).length;
-			return {
-				range: range.label,
-				count,
-				percentage:
-					totalWithResponseTime > 0 ? (count / totalWithResponseTime) * 100 : 0,
-			};
-		});
-
-		// Slowest endpoints (grouped)
+		// Slowest endpoints from grouped data
 		const slowestEndpoints = requestsByEndpoint
 			.filter((e) => e.averageResponseTime > 0)
 			.sort((a, b) => b.averageResponseTime - a.averageResponseTime)
 			.slice(0, 10);
 
-		// Latency over time - hourly for 1 day, daily for longer periods
-		let latencyOverTime: Array<{
+		// Latency over time from bucket table
+		const latencyOverTimeRaw = this.db
+			.query(
+				`
+         SELECT 
+           datetime(bucket, 'unixepoch') as time,
+           SUM(total_response_time) as totalTime,
+           SUM(hits) as count
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY bucket
+         ORDER BY bucket ASC
+       `,
+			)
+			.all(alignedCutoff) as Array<{
 			time: string;
-			averageResponseTime: number;
-			p95: number | null;
+			totalTime: number;
 			count: number;
 		}>;
 
-		if (days === 1) {
-			// 15-minute intervals for last 24 hours (excluding stats)
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			// For 15-minute intervals, we'll skip P95 calculation to improve performance
-			latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
-				time: intervalData.time,
-				averageResponseTime: intervalData.averageResponseTime,
-				p95: null, // Skip P95 for better performance with high granularity
-				count: intervalData.count,
-			}));
-		} else if (days <= 7) {
-			// Hourly latency data for 7 days (excluding stats)
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			latencyOverTime = latencyOverTimeRaw.map((hourData) => ({
-				time: hourData.time,
-				averageResponseTime: hourData.averageResponseTime,
-				p95: null, // Skip P95 for better performance
-				count: hourData.count,
-			}));
-		} else {
-			// 4-hour intervals for longer periods (excluding stats)
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
-				time: intervalData.time,
-				averageResponseTime: intervalData.averageResponseTime,
-				p95: null, // Skip P95 for better performance
-				count: intervalData.count,
-			}));
-		}
+		const latencyOverTime = latencyOverTimeRaw.map((r) => ({
+			time: r.time,
+			averageResponseTime: r.count > 0 ? r.totalTime / r.count : 0,
+			p95: null as number | null,
+			count: r.count,
+		}));
 
 		// Performance Metrics
+		const totalCount = totalResult.count ?? 0;
 		const errorRequests = statusResults
 			.filter((s) => s.status >= 400)
 			.reduce((sum, s) => sum + s.count, 0);
-		const errorRate =
-			totalResult.count > 0 ? (errorRequests / totalResult.count) * 100 : 0;
+		const errorRate = totalCount > 0 ? (errorRequests / totalCount) * 100 : 0;
 
 		// Calculate throughput (requests per hour)
 		const timeSpanHours = days * 24;
-		const throughput = totalResult.count / timeSpanHours;
+		const throughput = totalCount / timeSpanHours;
 
-		// Calculate APDEX score (Application Performance Index)
-		// Satisfied: <= 100ms, Tolerating: <= 400ms, Frustrated: > 400ms
-		const satisfiedCount = sortedTimes.filter((t) => t <= 100).length;
-		const toleratingCount = sortedTimes.filter(
-			(t) => t > 100 && t <= 400,
-		).length;
-		const apdex =
-			totalWithResponseTime > 0
-				? (satisfiedCount + toleratingCount * 0.5) / totalWithResponseTime
-				: 0;
+		// APDEX not available with bucket data (need raw response times)
+		const apdex = 0;
 
 		// Calculate cache hit rate (redirects vs data endpoints)
 		const redirectRequests = requestsByEndpoint
@@ -1652,300 +1459,88 @@ class Cache {
 				? (redirectRequests / (redirectRequests + dataRequests)) * 100
 				: 0;
 
-		// Simulate uptime (would need actual monitoring data)
-		const uptime = Math.max(0, 100 - errorRate * 2); // Simple approximation
+		const uptime = Math.max(0, 100 - errorRate * 2);
 
-		// Peak traffic analysis (excluding stats)
+		// Peak traffic analysis from bucket table
 		const peakHourData = this.db
 			.query(
 				`
-         SELECT
-           strftime('%H:00', datetime(timestamp / 1000, 'unixepoch')) as hour,
-           COUNT(*) as count
-         FROM request_analytics
-         WHERE timestamp > ? AND endpoint != '/stats'
-         GROUP BY strftime('%H:00', datetime(timestamp / 1000, 'unixepoch'))
+         SELECT 
+           strftime('%H:00', datetime(bucket, 'unixepoch')) as hour,
+           SUM(hits) as count
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY strftime('%H:00', datetime(bucket, 'unixepoch'))
          ORDER BY count DESC
          LIMIT 1
        `,
 			)
-			.get(cutoffTime) as { hour: string; count: number } | null;
+			.get(alignedCutoff) as { hour: string; count: number } | null;
 
 		const peakDayData = this.db
 			.query(
 				`
-         SELECT
-           DATE(timestamp / 1000, 'unixepoch') as day,
-           COUNT(*) as count
-         FROM request_analytics
-         WHERE timestamp > ? AND endpoint != '/stats'
-         GROUP BY DATE(timestamp / 1000, 'unixepoch')
+         SELECT 
+           DATE(bucket, 'unixepoch') as day,
+           SUM(hits) as count
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY DATE(bucket, 'unixepoch')
          ORDER BY count DESC
          LIMIT 1
        `,
 			)
-			.get(cutoffTime) as { day: string; count: number } | null;
+			.get(alignedCutoff) as { day: string; count: number } | null;
 
-		// Traffic Overview - detailed route breakdown over time
-		let trafficOverview: Array<{
+		// Traffic Overview from bucket table
+		const trafficRaw = this.db
+			.query(
+				`
+         SELECT 
+           datetime(bucket, 'unixepoch') as time,
+           endpoint,
+           SUM(hits) as count
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY bucket, endpoint
+         ORDER BY bucket ASC
+       `,
+			)
+			.all(alignedCutoff) as Array<{
 			time: string;
-			routes: Record<string, number>;
-			total: number;
+			endpoint: string;
+			count: number;
 		}>;
 
-		if (days === 1) {
-			// Hourly route breakdown for last 24 hours
-			const trafficRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as time,
-             endpoint,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')), endpoint
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				endpoint: string;
-				count: number;
-			}>;
-
-			// Group by time and create route breakdown
-			const timeGroups: Record<string, Record<string, number>> = {};
-			for (const row of trafficRaw) {
-				if (!timeGroups[row.time]) {
-					timeGroups[row.time] = {};
-				}
-
-				// Apply same grouping logic as endpoints
-				let groupKey: string;
-				const endpoint = row.endpoint;
-
-				if (endpoint === "/" || endpoint === "/dashboard") {
-					groupKey = "Dashboard";
-				} else if (endpoint === "/health") {
-					groupKey = "Health Check";
-				} else if (endpoint === "/swagger" || endpoint.startsWith("/swagger")) {
-					groupKey = "API Documentation";
-				} else if (endpoint === "/emojis") {
-					groupKey = "Emoji List";
-				} else if (endpoint.match(/^\/emojis\/[^/]+$/)) {
-					groupKey = "Emoji Data";
-				} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-					groupKey = "Emoji Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+$/)) {
-					groupKey = "User Data";
-				} else if (endpoint.match(/^\/users\/[^/]+\/r$/)) {
-					groupKey = "User Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+\/purge$/)) {
-					groupKey = "Cache Management";
-				} else if (endpoint === "/reset") {
-					groupKey = "Cache Management";
-				} else {
-					// For any other endpoints, try to categorize them
-					if (endpoint.includes("/users/") && endpoint.includes("/r")) {
-						groupKey = "User Redirects";
-					} else if (endpoint.includes("/users/")) {
-						groupKey = "User Data";
-					} else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
-						groupKey = "Emoji Redirects";
-					} else if (endpoint.includes("/emojis/")) {
-						groupKey = "Emoji Data";
-					} else {
-						groupKey = "Other";
-					}
-				}
-
-				const group = timeGroups[row.time];
-
-				if (group) {
-					group[groupKey] = (group[groupKey] || 0) + row.count;
-				}
+		// Group by time and create route breakdown
+		const timeGroups: Record<string, Record<string, number>> = {};
+		for (const row of trafficRaw) {
+			if (!timeGroups[row.time]) {
+				timeGroups[row.time] = {};
 			}
 
-			trafficOverview = Object.entries(timeGroups)
-				.map(([time, routes]) => ({
-					time,
-					routes,
-					total: Object.values(routes).reduce((sum, count) => sum + count, 0),
-				}))
-				.sort((a, b) => a.time.localeCompare(b.time));
-		} else if (days <= 7) {
-			// 4-hour intervals for 7 days
-			const trafficRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as hour,
-             endpoint,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')), endpoint
-           ORDER BY hour ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				hour: string;
-				endpoint: string;
-				count: number;
-			}>;
+			const groupKey = this.groupEndpoint(row.endpoint);
+			const group = timeGroups[row.time];
 
-			// Group into 4-hour intervals
-			const intervalGroups: Record<string, Record<string, number>> = {};
-			for (const row of trafficRaw) {
-				const hourStr = row.hour?.split(" ")[1]?.split(":")[0];
-				const hour = hourStr ? parseInt(hourStr, 10) : 0;
-				const intervalHour = Math.floor(hour / 4) * 4;
-				const intervalTime =
-					row.hour.split(" ")[0] +
-					` ${intervalHour.toString().padStart(2, "0")}:00`;
-
-				if (!intervalGroups[intervalTime]) {
-					intervalGroups[intervalTime] = {};
-				}
-
-				// Apply same grouping logic
-				let groupKey: string;
-				const endpoint = row.endpoint;
-
-				if (endpoint === "/" || endpoint === "/dashboard") {
-					groupKey = "Dashboard";
-				} else if (endpoint === "/health") {
-					groupKey = "Health Check";
-				} else if (endpoint === "/swagger" || endpoint.startsWith("/swagger")) {
-					groupKey = "API Documentation";
-				} else if (endpoint === "/emojis") {
-					groupKey = "Emoji List";
-				} else if (endpoint.match(/^\/emojis\/[^/]+$/)) {
-					groupKey = "Emoji Data";
-				} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-					groupKey = "Emoji Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+$/)) {
-					groupKey = "User Data";
-				} else if (endpoint.match(/^\/users\/[^/]+\/r$/)) {
-					groupKey = "User Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+\/purge$/)) {
-					groupKey = "Cache Management";
-				} else if (endpoint === "/reset") {
-					groupKey = "Cache Management";
-				} else {
-					// For any other endpoints, try to categorize them
-					if (endpoint.includes("/users/") && endpoint.includes("/r")) {
-						groupKey = "User Redirects";
-					} else if (endpoint.includes("/users/")) {
-						groupKey = "User Data";
-					} else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
-						groupKey = "Emoji Redirects";
-					} else if (endpoint.includes("/emojis/")) {
-						groupKey = "Emoji Data";
-					} else {
-						groupKey = "Other";
-					}
-				}
-
-				intervalGroups[intervalTime][groupKey] =
-					(intervalGroups[intervalTime][groupKey] || 0) + row.count;
+			if (group) {
+				group[groupKey] = (group[groupKey] || 0) + row.count;
 			}
-
-			trafficOverview = Object.entries(intervalGroups)
-				.map(([time, routes]) => ({
-					time,
-					routes,
-					total: Object.values(routes).reduce((sum, count) => sum + count, 0),
-				}))
-				.sort((a, b) => a.time.localeCompare(b.time));
-		} else {
-			// Daily breakdown for longer periods
-			const trafficRaw = this.db
-				.query(
-					`
-           SELECT
-             DATE(timestamp / 1000, 'unixepoch') as time,
-             endpoint,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY DATE(timestamp / 1000, 'unixepoch'), endpoint
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				endpoint: string;
-				count: number;
-			}>;
-
-			// Group by day
-			const dayGroups: Record<string, Record<string, number>> = {};
-			for (const row of trafficRaw) {
-				if (!dayGroups[row.time]) {
-					dayGroups[row.time] = {};
-				}
-
-				// Apply same grouping logic
-				let groupKey: string;
-				const endpoint = row.endpoint;
-
-				if (endpoint === "/" || endpoint === "/dashboard") {
-					groupKey = "Dashboard";
-				} else if (endpoint === "/health") {
-					groupKey = "Health Check";
-				} else if (endpoint === "/swagger" || endpoint.startsWith("/swagger")) {
-					groupKey = "API Documentation";
-				} else if (endpoint === "/emojis") {
-					groupKey = "Emoji List";
-				} else if (endpoint.match(/^\/emojis\/[^/]+$/)) {
-					groupKey = "Emoji Data";
-				} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-					groupKey = "Emoji Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+$/)) {
-					groupKey = "User Data";
-				} else if (endpoint.match(/^\/users\/[^/]+\/r$/)) {
-					groupKey = "User Redirects";
-				} else if (endpoint.match(/^\/users\/[^/]+\/purge$/)) {
-					groupKey = "Cache Management";
-				} else if (endpoint === "/reset") {
-					groupKey = "Cache Management";
-				} else {
-					// For any other endpoints, try to categorize them
-					if (endpoint.includes("/users/") && endpoint.includes("/r")) {
-						groupKey = "User Redirects";
-					} else if (endpoint.includes("/users/")) {
-						groupKey = "User Data";
-					} else if (endpoint.includes("/emojis/") && endpoint.includes("/r")) {
-						groupKey = "Emoji Redirects";
-					} else if (endpoint.includes("/emojis/")) {
-						groupKey = "Emoji Data";
-					} else {
-						groupKey = "Other";
-					}
-				}
-				const group = dayGroups[row.time];
-				if (group) {
-					group[groupKey] = (group[groupKey] || 0) + row.count;
-				}
-			}
-
-			trafficOverview = Object.entries(dayGroups)
-				.map(([time, routes]) => ({
-					time,
-					routes,
-					total: Object.values(routes).reduce((sum, count) => sum + count, 0),
-				}))
-				.sort((a, b) => a.time.localeCompare(b.time));
 		}
 
+		const trafficOverview = Object.entries(timeGroups)
+			.map(([time, routes]) => ({
+				time,
+				routes,
+				total: Object.values(routes).reduce((sum, count) => sum + count, 0),
+			}))
+			.sort((a, b) => a.time.localeCompare(b.time));
+
 		const result = {
-			totalRequests: totalResult.count,
+			totalRequests: totalCount,
 			requestsByEndpoint: requestsByEndpoint,
 			requestsByStatus: statusResults,
 			requestsByDay: timeResults,
-			averageResponseTime: avgResponseResult.avg,
+			averageResponseTime: averageResponseTime,
 			topUserAgents: topUserAgents,
 			latencyAnalytics: {
 				percentiles,
@@ -1968,7 +1563,7 @@ class Cache {
 			},
 			dashboardMetrics: {
 				statsRequests: statsResult.count,
-				totalWithStats: totalResult.count + statsResult.count,
+				totalWithStats: totalCount + statsResult.count,
 			},
 			trafficOverview,
 		};
@@ -1989,7 +1584,6 @@ class Cache {
 		averageResponseTime: number | null;
 		uptime: number;
 	}> {
-		// Check cache first
 		const cacheKey = `essential_${days}`;
 		const cached = this.typedAnalyticsCache.getEssentialStatsData(cacheKey);
 
@@ -1997,42 +1591,44 @@ class Cache {
 			return cached;
 		}
 
-		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+		const { table, bucketSize } = this.selectBucketTable(days);
+		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+		const alignedCutoff = cutoffBucket - (cutoffBucket % bucketSize);
 
-		// Total requests (excluding stats endpoint) - fastest query
+		// Total requests from bucket table
 		const totalResult = this.db
 			.query(
-				"SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND endpoint != '/stats'",
+				`SELECT SUM(hits) as count FROM ${table} WHERE bucket >= ? AND endpoint != '/stats'`,
 			)
-			.get(cutoffTime) as { count: number };
+			.get(alignedCutoff) as { count: number | null };
 
-		// Average response time (excluding stats) - simple query
+		// Average response time from bucket table
 		const avgResponseResult = this.db
 			.query(
-				"SELECT AVG(response_time) as avg FROM request_analytics WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'",
+				`SELECT SUM(total_response_time) as totalTime, SUM(hits) as totalHits FROM ${table} WHERE bucket >= ? AND endpoint != '/stats'`,
 			)
-			.get(cutoffTime) as { avg: number | null };
+			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
 
-		// Simple error rate calculation for uptime
-		const errorRequests = this.db
+		// Error rate from bucket table
+		const errorResult = this.db
 			.query(
-				"SELECT COUNT(*) as count FROM request_analytics WHERE timestamp > ? AND status_code >= 400 AND endpoint != '/stats'",
+				`SELECT SUM(hits) as count FROM ${table} WHERE bucket >= ? AND status_code >= 400 AND endpoint != '/stats'`,
 			)
-			.get(cutoffTime) as { count: number };
+			.get(alignedCutoff) as { count: number | null };
 
-		const errorRate =
-			totalResult.count > 0
-				? (errorRequests.count / totalResult.count) * 100
-				: 0;
-		const uptime = Math.max(0, 100 - errorRate * 2); // Simple approximation
+		const totalCount = totalResult.count ?? 0;
+		const errorRate = totalCount > 0 ? ((errorResult.count ?? 0) / totalCount) * 100 : 0;
+		const uptime = Math.max(0, 100 - errorRate * 2);
 
 		const result = {
-			totalRequests: totalResult.count,
-			averageResponseTime: avgResponseResult.avg,
+			totalRequests: totalCount,
+			averageResponseTime:
+				avgResponseResult.totalHits && avgResponseResult.totalHits > 0
+					? (avgResponseResult.totalTime ?? 0) / avgResponseResult.totalHits
+					: null,
 			uptime: uptime,
 		};
 
-		// Cache the result
 		this.typedAnalyticsCache.setEssentialStatsData(cacheKey, result);
 
 		return result;
@@ -2056,7 +1652,6 @@ class Cache {
 			count: number;
 		}>;
 	}> {
-		// Check cache first
 		const cacheKey = `charts_${days}`;
 		const cached = this.typedAnalyticsCache.getChartData(cacheKey);
 
@@ -2064,283 +1659,84 @@ class Cache {
 			return cached;
 		}
 
-		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
+		const { table, bucketSize } = this.selectBucketTable(days);
+		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+		const alignedCutoff = cutoffBucket - (cutoffBucket % bucketSize);
 
-		// Reuse the existing time logic from getAnalytics
-		let timeResults: Array<{
+		// Requests over time from bucket table
+		const timeResultsRaw = this.db
+			.query(
+				`
+         SELECT 
+           datetime(bucket, 'unixepoch') as date,
+           SUM(hits) as count,
+           SUM(total_response_time) as totalTime,
+           SUM(hits) as totalHits
+         FROM ${table}
+         WHERE bucket >= ? AND endpoint != '/stats'
+         GROUP BY bucket
+         ORDER BY bucket ASC
+       `,
+			)
+			.all(alignedCutoff) as Array<{
 			date: string;
 			count: number;
-			averageResponseTime: number;
+			totalTime: number;
+			totalHits: number;
 		}>;
 
-		if (days === 1) {
-			// 15-minute intervals for last 24 hours (excluding stats)
-			const intervalResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
+		const requestsByDay = timeResultsRaw.map((r) => ({
+			date: r.date,
+			count: r.count,
+			averageResponseTime: r.totalHits > 0 ? r.totalTime / r.totalHits : 0,
+		}));
 
-			timeResults = intervalResultsRaw.map((h) => ({
-				date: h.date,
-				count: h.count,
-				averageResponseTime: h.averageResponseTime ?? 0,
-			}));
-		} else if (days <= 7) {
-			// Hourly data for 7 days (excluding stats)
-			const hourResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
-
-			timeResults = hourResultsRaw.map((h) => ({
-				date: h.date,
-				count: h.count,
-				averageResponseTime: h.averageResponseTime ?? 0,
-			}));
-		} else {
-			// 4-hour intervals for longer periods (excluding stats)
-			const intervalResultsRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END as date,
-             COUNT(*) as count,
-             AVG(response_time) as averageResponseTime
-           FROM request_analytics
-           WHERE timestamp > ? AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END
-           ORDER BY date ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				date: string;
-				count: number;
-				averageResponseTime: number | null;
-			}>;
-
-			timeResults = intervalResultsRaw.map((d) => ({
-				date: d.date,
-				count: d.count,
-				averageResponseTime: d.averageResponseTime ?? 0,
-			}));
-		}
-
-		// Latency over time data (reuse from getAnalytics)
-		let latencyOverTime: Array<{
-			time: string;
-			averageResponseTime: number;
-			p95: number | null;
-			count: number;
-		}>;
-
-		if (days === 1) {
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 15 THEN '00'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 30 THEN '15'
-               WHEN CAST(strftime('%M', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 45 THEN '30'
-               ELSE '45'
-             END
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
-				time: intervalData.time,
-				averageResponseTime: intervalData.averageResponseTime,
-				p95: null, // Skip P95 for better performance
-				count: intervalData.count,
-			}));
-		} else if (days <= 7) {
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch')) as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d %H:00', datetime(timestamp / 1000, 'unixepoch'))
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			latencyOverTime = latencyOverTimeRaw.map((hourData) => ({
-				time: hourData.time,
-				averageResponseTime: hourData.averageResponseTime,
-				p95: null, // Skip P95 for better performance
-				count: hourData.count,
-			}));
-		} else {
-			const latencyOverTimeRaw = this.db
-				.query(
-					`
-           SELECT
-             strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END as time,
-             AVG(response_time) as averageResponseTime,
-             COUNT(*) as count
-           FROM request_analytics
-           WHERE timestamp > ? AND response_time IS NOT NULL AND endpoint != '/stats'
-           GROUP BY strftime('%Y-%m-%d ', datetime(timestamp / 1000, 'unixepoch')) ||
-             CASE
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 4 THEN '00:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 8 THEN '04:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 12 THEN '08:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 16 THEN '12:00'
-               WHEN CAST(strftime('%H', datetime(timestamp / 1000, 'unixepoch')) AS INTEGER) < 20 THEN '16:00'
-               ELSE '20:00'
-             END
-           ORDER BY time ASC
-         `,
-				)
-				.all(cutoffTime) as Array<{
-				time: string;
-				averageResponseTime: number;
-				count: number;
-			}>;
-
-			latencyOverTime = latencyOverTimeRaw.map((intervalData) => ({
-				time: intervalData.time,
-				averageResponseTime: intervalData.averageResponseTime,
-				p95: null, // Skip P95 for better performance
-				count: intervalData.count,
-			}));
-		}
+		// Latency over time (same query, different format)
+		const latencyOverTime = timeResultsRaw.map((r) => ({
+			time: r.date,
+			averageResponseTime: r.totalHits > 0 ? r.totalTime / r.totalHits : 0,
+			p95: null as number | null,
+			count: r.count,
+		}));
 
 		const result = {
-			requestsByDay: timeResults,
-			latencyOverTime: latencyOverTime,
+			requestsByDay,
+			latencyOverTime,
 		};
 
-		// Cache the result
 		this.typedAnalyticsCache.setChartData(cacheKey, result);
 
 		return result;
 	}
 
 	/**
-	 * Gets user agents data only (slowest loading)
-	 * @param days Number of days to look back (default: 7)
+	 * Gets user agents data from cumulative stats table
+	 * @param _days Unused - user_agent_stats is cumulative
 	 * @returns User agents data
 	 */
 	async getUserAgents(
-		days: number = 7,
+		_days: number = 7,
 	): Promise<Array<{ userAgent: string; count: number }>> {
-		// Check cache first
-		const cacheKey = `useragents_${days}`;
+		const cacheKey = "useragents_all";
 		const cached = this.typedAnalyticsCache.getUserAgentData(cacheKey);
 
 		if (cached) {
 			return cached;
 		}
 
-		const cutoffTime = Date.now() - days * 24 * 60 * 60 * 1000;
-
-		// Top user agents (raw strings, excluding stats) - optimized with index hint
+		// Query user_agent_stats table directly (cumulative, no time filtering)
 		const topUserAgents = this.db
 			.query(
 				`
-         SELECT user_agent as userAgent, COUNT(*) as count
-         FROM request_analytics INDEXED BY idx_request_analytics_user_agent
-         WHERE timestamp > ? AND user_agent IS NOT NULL AND endpoint != '/stats'
-         GROUP BY user_agent
-         ORDER BY count DESC
+         SELECT user_agent as userAgent, hits as count
+         FROM user_agent_stats
+         WHERE user_agent IS NOT NULL
+         ORDER BY hits DESC
          LIMIT 50
        `,
 			)
-			.all(cutoffTime) as Array<{ userAgent: string; count: number }>;
+			.all() as Array<{ userAgent: string; count: number }>;
 
-		// Cache the result
 		this.typedAnalyticsCache.setUserAgentData(cacheKey, topUserAgents);
 
 		return topUserAgents;
