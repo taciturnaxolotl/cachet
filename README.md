@@ -1,6 +1,6 @@
 # Cachet
 
-![screenshot of the analytics dashboard](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/screenshot.jpeg)
+![screenshot of the analytics dashboard](https://raw.githubusercontent.com/taciturnaxolotl/cachet/master/.github/images/screenshot.webp)
 
 <p align="center">
 	<img src="https://raw.githubusercontent.com/taciturnaxolotl/carriage/master/.github/images/line-break-thin.svg" />
@@ -115,13 +115,13 @@ await cache.insertUser(
   "U062UG485EE",
   "Kieran Klukas",
   "he/him",
-  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg"
+  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
 );
 
 await cache.insertEmoji(
   "hackshark",
   null,
-  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png"
+  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png",
 );
 
 const emoji = await cache.getEmoji("hackshark");
@@ -262,6 +262,7 @@ export const handleMyNewEndpoint: RouteHandlerWithAnalytics = async (
 ```
 
 The route will automatically:
+
 - Handle analytics recording (request timing, status codes, user agents)
 - Generate Swagger documentation with the provided metadata
 - Include proper TypeScript types for parameters and responses
