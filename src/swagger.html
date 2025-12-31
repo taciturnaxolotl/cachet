@@ -1,53 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cachet API Documentation</title>
-  <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    html {
-      box-sizing: border-box;
-      overflow: -moz-scrollbars-vertical;
-      overflow-y: scroll;
-    }
-    
-    *,
-    *:before,
-    *:after {
-      box-sizing: inherit;
-    }
-    
-    body {
-      margin: 0;
-      background: #fafafa;
+    .dark-mode {
+      --scalar-background-1: #0d1117;
+      --scalar-background-2: #161b22;
+      --scalar-background-3: #21262d;
+      --scalar-background-accent: #238636;
+      --scalar-border-color: #30363d;
+      --scalar-color-1: #f0f6fc;
+      --scalar-color-2: #c9d1d9;
+      --scalar-color-3: #8b949e;
+      --scalar-color-accent: #58a6ff;
+      --scalar-color-green: #238636;
+      --scalar-button-1: #238636;
+      --scalar-button-1-hover: #2ea043;
+      --scalar-button-1-color: #ffffff;
+      --scalar-sidebar-background-1: #0d1117;
+      --scalar-sidebar-border-color: #30363d;
+      --scalar-sidebar-color-1: #f0f6fc;
+      --scalar-sidebar-color-2: #c9d1d9;
+      --scalar-sidebar-color-active: #58a6ff;
     }
   </style>
 </head>
 <body>
-  <div id="swagger-ui"></div>
-
-  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
-  <script>
-    window.onload = () => {
-      // Begin Swagger UI call region
-      const ui = SwaggerUIBundle({
-        url: "/swagger.json",
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        presets: [
-          SwaggerUIBundle.presets.apis,
-          SwaggerUIStandalonePreset
-        ],
-        plugins: [
-          SwaggerUIBundle.plugins.DownloadUrl
-        ],
-        layout: "StandaloneLayout"
-      });
-      // End Swagger UI call region
-      window.ui = ui;
-    };
-  </script>
+  <script
+    id="api-reference"
+    data-url="/swagger.json"
+    data-dark-mode="true"
+  ></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body>
 </html>
