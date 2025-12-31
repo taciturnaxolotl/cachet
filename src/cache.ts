@@ -508,6 +508,13 @@ class Cache {
 				console.log("Scheduled emoji update completed");
 			}
 		});
+
+		// Run VACUUM daily at 3am to reclaim disk space
+		schedule("0 3 * * *", () => {
+			console.log("Running scheduled VACUUM...");
+			this.db.run("VACUUM");
+			console.log("VACUUM completed");
+		});
 	}
 
 	/**
