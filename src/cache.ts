@@ -11,6 +11,7 @@ import type { SlackUser } from "./slack";
  */
 interface SlackUserProvider {
 	getUserInfo(userId: string): Promise<SlackUser>;
+	testAuth(): Promise<boolean>;
 }
 
 /**
@@ -36,7 +37,7 @@ interface DayMetrics {
 
 interface UserAgentMetrics {
 	userAgent: string;
-	count: number;
+	hits: number;
 }
 
 interface LatencyPercentiles {
@@ -649,11 +650,36 @@ class Cache {
 				heapUsed: number;
 				heapTotal: number;
 				percentage: number;
+				details?: {
+					heapUsedMiB: number;
+					heapTotalMiB: number;
+					heapPercent: number;
+					rssMiB: number;
+					externalMiB: number;
+					arrayBuffersMiB: number;
+				};
 			};
 		};
 		uptime: number;
 	}> {
-		const checks = {
+		const checks: {
+			database: { status: boolean; latency?: number };
+			slackApi: { status: boolean; error?: string };
+			queueDepth: number;
+			memoryUsage: {
+				heapUsed: number;
+				heapTotal: number;
+				percentage: number;
+				details?: {
+					heapUsedMiB: number;
+					heapTotalMiB: number;
+					heapPercent: number;
+					rssMiB: number;
+					externalMiB: number;
+					arrayBuffersMiB: number;
+				};
+			};
+		} = {
 			database: { status: false, latency: 0 },
 			slackApi: { status: false },
 			queueDepth: this.userUpdateQueue.size,
@@ -676,7 +702,7 @@ class Cache {
 		// Check Slack API if wrapper is available
 		if (this.slackWrapper) {
 			try {
-				await this.slackWrapper.getUserInfo("U062UG485EE"); // Use a known test user
+				await this.slackWrapper.testAuth();
 				checks.slackApi = { status: true };
 			} catch (error) {
 				checks.slackApi = {
@@ -933,33 +959,15 @@ class Cache {
 	}
 
 	/**
-	 * Lists all emoji in the cache
-	 * @returns Array of Emoji objects that haven't expired
-	 */
-	async listEmojis(): Promise<Emoji[]> {
-		const results = this.db
-			.query("SELECT * FROM emojis WHERE expiration > ?")
-			.all(Date.now()) as Emoji[];
-
-		return results.map((result) => ({
-			type: "emoji",
-			id: result.id,
-			name: result.name,
-			alias: result.alias || null,
-			imageUrl: result.imageUrl,
-			expiration: new Date(result.expiration),
-		}));
-	}
-
-	/**
 	 * Retrieves a user from the cache
 	 * @param userId Unique identifier of the user
 	 * @returns User object if found and not expired, null otherwise
 	 */
 	async getUser(userId: string): Promise<User | null> {
+		const normalizedId = userId.toUpperCase();
 		const result = this.db
 			.query("SELECT * FROM users WHERE userId = ?")
-			.get(userId.toUpperCase()) as User;
+			.get(normalizedId) as User;
 
 		if (!result) {
 			return null;
@@ -970,7 +978,7 @@ class Cache {
 
 		// If user is expired, remove and return null
 		if (expiration < now) {
-			this.db.run("DELETE FROM users WHERE userId = ?", [userId]);
+			this.db.run("DELETE FROM users WHERE userId = ?", [normalizedId]);
 			return null;
 		}
 
@@ -983,14 +991,14 @@ class Cache {
 			const newExpiration = now + 7 * 24 * 60 * 60 * 1000;
 			this.db.run("UPDATE users SET expiration = ? WHERE userId = ?", [
 				newExpiration,
-				userId.toUpperCase(),
+				normalizedId,
 			]);
 
 			// Queue for background update to get fresh data
-			this.queueUserUpdate(userId);
+			this.queueUserUpdate(normalizedId);
 
 			console.log(
-				`Touch-refresh: Extended TTL for user ${userId} and queued for update`,
+				`Touch-refresh: Extended TTL for user ${normalizedId} and queued for update`,
 			);
 		}
 
@@ -1799,12 +1807,9 @@ class Cache {
 
 	/**
 	 * Gets user agents data from cumulative stats table
-	 * @param _days Unused - user_agent_stats is cumulative
-	 * @returns User agents data
+	 * @returns User agents data (cumulative, not time-filtered)
 	 */
-	async getUserAgents(
-		_days: number = 7,
-	): Promise<Array<{ userAgent: string; hits: number }>> {
+	async getUserAgents(): Promise<Array<{ userAgent: string; hits: number }>> {
 		const cacheKey = "useragents_all";
 		const cached = this.typedAnalyticsCache.getUserAgentData(cacheKey);
 

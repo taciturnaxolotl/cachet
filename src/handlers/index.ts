@@ -12,6 +12,15 @@ import type { SlackWrapper } from "../slackWrapper";
 let cache!: SlackCache;
 let slackApp!: SlackWrapper;
 
+/**
+ * Parse a string to a positive integer, returning a fallback if invalid
+ */
+function parsePositiveInt(value: string | null, fallback: number): number {
+	if (!value) return fallback;
+	const n = Number.parseInt(value, 10);
+	return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 export function injectDependencies(
 	cacheInstance: SlackCache,
 	slackInstance: SlackWrapper,
@@ -177,8 +186,15 @@ export const handlePurgeUser: RouteHandlerWithAnalytics = async (
 	request,
 	recordAnalytics,
 ) => {
+	const configuredToken = process.env.BEARER_TOKEN;
+	if (!configuredToken) {
+		console.error("BEARER_TOKEN is not configured");
+		await recordAnalytics(500);
+		return new Response("Server misconfigured", { status: 500 });
+	}
+
 	const authHeader = request.headers.get("authorization") || "";
-	if (authHeader !== `Bearer ${process.env.BEARER_TOKEN}`) {
+	if (authHeader !== `Bearer ${configuredToken}`) {
 		await recordAnalytics(401);
 		return new Response("Unauthorized", { status: 401 });
 	}
@@ -246,8 +262,15 @@ export const handleResetCache: RouteHandlerWithAnalytics = async (
 	request,
 	recordAnalytics,
 ) => {
+	const configuredToken = process.env.BEARER_TOKEN;
+	if (!configuredToken) {
+		console.error("BEARER_TOKEN is not configured");
+		await recordAnalytics(500);
+		return new Response("Server misconfigured", { status: 500 });
+	}
+
 	const authHeader = request.headers.get("authorization") || "";
-	if (authHeader !== `Bearer ${process.env.BEARER_TOKEN}`) {
+	if (authHeader !== `Bearer ${configuredToken}`) {
 		await recordAnalytics(401);
 		return new Response("Unauthorized", { status: 401 });
 	}
@@ -262,8 +285,7 @@ export const handleGetEssentialStats: RouteHandlerWithAnalytics = async (
 ) => {
 	const url = new URL(request.url);
 	const params = new URLSearchParams(url.search);
-	const daysParam = params.get("days");
-	const days = daysParam ? parseInt(daysParam, 10) : 7;
+	const days = parsePositiveInt(params.get("days"), 7);
 
 	const stats = await cache.getEssentialStats(days);
 	await recordAnalytics(200);
@@ -276,8 +298,7 @@ export const handleGetChartData: RouteHandlerWithAnalytics = async (
 ) => {
 	const url = new URL(request.url);
 	const params = new URLSearchParams(url.search);
-	const daysParam = params.get("days");
-	const days = daysParam ? parseInt(daysParam, 10) : 7;
+	const days = parsePositiveInt(params.get("days"), 7);
 
 	const chartData = await cache.getChartData(days);
 	await recordAnalytics(200);
@@ -311,15 +332,20 @@ export const handleGetTraffic: RouteHandlerWithAnalytics = async (
 
 	const startParam = params.get("start");
 	const endParam = params.get("end");
-	const daysParam = params.get("days");
 
 	let options: { days?: number; startTime?: number; endTime?: number } = {};
 
 	if (startParam && endParam) {
-		options.startTime = parseInt(startParam, 10);
-		options.endTime = parseInt(endParam, 10);
+		const start = parsePositiveInt(startParam, 0);
+		const end = parsePositiveInt(endParam, 0);
+		if (start > 0 && end > 0) {
+			options.startTime = start;
+			options.endTime = end;
+		} else {
+			options.days = 7;
+		}
 	} else {
-		options.days = daysParam ? parseInt(daysParam, 10) : 7;
+		options.days = parsePositiveInt(params.get("days"), 7);
 	}
 
 	const traffic = cache.getTraffic(options);
@@ -333,13 +359,12 @@ export const handleGetStats: RouteHandlerWithAnalytics = async (
 ) => {
 	const url = new URL(request.url);
 	const params = new URLSearchParams(url.search);
-	const daysParam = params.get("days");
-	const days = daysParam ? parseInt(daysParam, 10) : 7;
+	const days = parsePositiveInt(params.get("days"), 7);
 
 	const [essentialStats, chartData, userAgents] = await Promise.all([
 		cache.getEssentialStats(days),
 		cache.getChartData(days),
-		cache.getUserAgents(days),
+		cache.getUserAgents(),
 	]);
 
 	await recordAnalytics(200);

@@ -341,9 +341,12 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 							type: "object",
 							properties: {
 								totalRequests: { type: "number", example: 12345 },
-								averageResponseTime: { type: "number", example: 23.5 },
+								averageResponseTime: {
+									type: "number",
+									nullable: true,
+									example: 23.5,
+								},
 								uptime: { type: "number", example: 99.9 },
-								period: { type: "string", example: "7 days" },
 							},
 						}),
 					]),
@@ -371,13 +374,30 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 					},
 					responses: Object.fromEntries([
 						apiResponse(200, "Chart data retrieved successfully", {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									time: { type: "string", example: "2024-01-01T12:00:00Z" },
-									count: { type: "number", example: 42 },
-									averageResponseTime: { type: "number", example: 25.3 },
+							type: "object",
+							properties: {
+								requestsByDay: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											date: { type: "string", example: "2024-01-01 12:00:00" },
+											count: { type: "number", example: 42 },
+											averageResponseTime: { type: "number", example: 25.3 },
+										},
+									},
+								},
+								latencyOverTime: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											time: { type: "string", example: "2024-01-01 12:00:00" },
+											averageResponseTime: { type: "number", example: 25.3 },
+											p95: { type: "number", nullable: true, example: null },
+											count: { type: "number", example: 42 },
+										},
+									},
 								},
 							},
 						}),
@@ -457,6 +477,12 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 										description: "Unix timestamp of bucket start",
 									},
 									hits: { type: "number", example: 42 },
+									avgLatency: {
+										type: "number",
+										nullable: true,
+										example: 25.3,
+										description: "Average response time in ms",
+									},
 								},
 							},
 						}),

@@ -32,8 +32,9 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 					"unknown";
 				const referer = request.headers.get("referer") || undefined;
 
-				// Use the actual request URL for dynamic paths, fallback to provided path
-				const analyticsPath = path.includes(":") ? request.url : path;
+				// Use the pathname for dynamic paths to ensure proper endpoint grouping
+				const requestUrl = new URL(request.url);
+				const analyticsPath = path.includes(":") ? requestUrl.pathname : path;
 
 				await cache.recordRequest(
 					analyticsPath,

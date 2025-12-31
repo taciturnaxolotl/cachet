@@ -22,10 +22,7 @@ interface SlackConfig {
 class SlackWrapper {
 	private signingSecret: string;
 	private botToken: string;
-	private limiter = new Bottleneck({
-		maxConcurrent: 10,
-		minTime: 10, // 100 requests per second
-	});
+	private limiter: Bottleneck;
 
 	/**
 	 * Creates a new SlackWrapper instance
@@ -35,7 +32,19 @@ class SlackWrapper {
 	constructor(config?: SlackConfig) {
 		this.signingSecret =
 			config?.signingSecret || process.env.SLACK_SIGNING_SECRET || "";
-		this.botToken = config?.botToken || process.env.SLACK_BOT_TOKEN || "";
+		this.botToken =
+			config?.botToken ||
+			process.env.SLACK_BOT_TOKEN ||
+			process.env.SLACK_TOKEN ||
+			"";
+
+		// Configure rate limiting - defaults are conservative to respect Slack API limits
+		const maxConcurrent = Number(process.env.SLACK_MAX_CONCURRENT ?? 3);
+		const minTime = Number(process.env.SLACK_MIN_TIME_MS ?? 200); // ~5 requests per second
+		this.limiter = new Bottleneck({
+			maxConcurrent: Number.isFinite(maxConcurrent) && maxConcurrent > 0 ? maxConcurrent : 3,
+			minTime: Number.isFinite(minTime) && minTime > 0 ? minTime : 200,
+		});
 
 		const missingFields = [];
 		if (!this.signingSecret) missingFields.push("signing secret");
@@ -43,7 +52,7 @@ class SlackWrapper {
 
 		if (missingFields.length > 0) {
 			throw new Error(
-				`Missing required Slack credentials: ${missingFields.join(" and ")} either pass them to the class or set them as environment variables`,
+				`Missing required Slack credentials: ${missingFields.join(" and ")} either pass them to the class or set them as environment variables (SLACK_BOT_TOKEN or SLACK_TOKEN)`,
 			);
 		}
 	}
@@ -124,19 +133,46 @@ class SlackWrapper {
 	}
 
 	/**
-	 * Verifies a Slack request signature
-	 * @param signature The signature from the request header
-	 * @param timestamp The timestamp from the request header
+	 * Verifies a Slack request signature with timestamp freshness check
+	 * @param signature The signature from the request header (x-slack-signature)
+	 * @param timestamp The timestamp from the request header (x-slack-request-timestamp)
 	 * @param body The raw request body
+	 * @param maxAgeSeconds Maximum age of timestamp in seconds (default: 5 minutes)
 	 * @returns boolean indicating if the signature is valid
 	 */
-	verifySignature(signature: string, timestamp: string, body: string): boolean {
+	verifySignature(
+		signature: string,
+		timestamp: string,
+		body: string,
+		maxAgeSeconds: number = 300,
+	): boolean {
+		if (!signature || !timestamp) {
+			return false;
+		}
+
+		// Reject old timestamps to prevent replay attacks
+		const ts = Number(timestamp);
+		if (!Number.isFinite(ts)) {
+			return false;
+		}
+
+		const now = Math.floor(Date.now() / 1000);
+		if (Math.abs(now - ts) > maxAgeSeconds) {
+			return false;
+		}
+
 		const baseString = `v0:${timestamp}:${body}`;
 		const hmac = createHmac("sha256", this.signingSecret);
-		const computedSignature = `v0=${hmac.update(baseString).digest("hex")}`;
+		const expected = `v0=${hmac.update(baseString).digest("hex")}`;
+
+		// Ensure equal length before timingSafeEqual to avoid exception
+		if (expected.length !== signature.length) {
+			return false;
+		}
+
 		return timingSafeEqual(
-			new Uint8Array(Buffer.from(signature)),
-			new Uint8Array(Buffer.from(computedSignature)),
+			Buffer.from(signature, "utf8"),
+			Buffer.from(expected, "utf8"),
 		);
 	}
 }
