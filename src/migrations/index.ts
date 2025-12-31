@@ -1,7 +1,7 @@
 import { bucketAnalyticsMigration } from "./bucketAnalyticsMigration";
 import { endpointGroupingMigration } from "./endpointGroupingMigration";
 import { logGroupingMigration } from "./logGroupingMigration";
-import { Migration } from "./types";
+import type { Migration } from "./types";
 
 // Export all migrations
 export const migrations = [
@@ -12,4 +12,4 @@ export const migrations = [
 ];
 
 // Export the migration types
-export { Migration };
+export type { Migration };

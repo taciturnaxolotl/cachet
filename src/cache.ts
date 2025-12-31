@@ -1216,7 +1216,7 @@ class Cache {
 			averageResponseTime: number;
 		}>;
 		averageResponseTime: number | null;
-		topUserAgents: Array<{ userAgent: string; count: number }>;
+		topUserAgents: Array<{ userAgent: string; hits: number }>;
 		latencyAnalytics: {
 			percentiles: {
 				p50: number | null;
@@ -1418,14 +1418,14 @@ class Cache {
 		const topUserAgents = this.db
 			.query(
 				`
-         SELECT user_agent as userAgent, hits as count
+         SELECT user_agent as userAgent, hits
          FROM user_agent_stats
          WHERE user_agent IS NOT NULL
          ORDER BY hits DESC
          LIMIT 50
        `,
 			)
-			.all() as Array<{ userAgent: string; count: number }>;
+			.all() as Array<{ userAgent: string; hits: number }>;
 
 		// Simplified latency analytics from bucket data
 		const percentiles = {
@@ -1603,8 +1603,8 @@ class Cache {
 				peakDayRequests: peakDayData?.count || 0,
 			},
 			dashboardMetrics: {
-				statsRequests: statsResult.count,
-				totalWithStats: totalCount + statsResult.count,
+				statsRequests: statsResult.count ?? 0,
+				totalWithStats: totalCount + (statsResult.count ?? 0),
 			},
 			trafficOverview,
 		};

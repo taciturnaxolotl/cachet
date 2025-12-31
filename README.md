@@ -23,12 +23,18 @@ I'm hosting on nest so I just setup a systemd service file that runs `bun run in
 Your `.env` file should look like this:
 
 ```bash
-SLACK_TOKEN=xoxb-123456789012-123456789012-123456789012-123456789012
+# Either SLACK_BOT_TOKEN or SLACK_TOKEN works (SLACK_BOT_TOKEN takes precedence)
+SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 SLACK_SIGNING_SECRET=12345678901234567890123456789012
 NODE_ENV=production
+BEARER_TOKEN=your-secure-random-token-here # Required for admin endpoints
 SENTRY_DSN="https://xxxxx@xxxx.ingest.us.sentry.io/123456" # Optional
 DATABASE_PATH=/path/to/db.sqlite # Optional
 PORT=3000 # Optional
+
+# Optional: Slack rate limiting (adjust if hitting rate limits)
+# SLACK_MAX_CONCURRENT=3    # Max concurrent requests (default: 3)
+# SLACK_MIN_TIME_MS=200     # Min ms between requests (default: 200)
 ```
 
 The slack app can be created from the [`manifest.yaml`](./manifest.yaml) in this repo. It just needs the `emoji:read` and `users:read` scopes.
@@ -128,19 +134,19 @@ const healthStatus = await cache.healthCheck();
 // Analytics data access
 const stats = await cache.getEssentialStats(7);
 const chartData = await cache.getChartData(7);
-const userAgents = await cache.getUserAgents(7);
+const userAgents = await cache.getUserAgents();
 ```
 
 The final bit was at this point a bit of a ridiculous one. I didn't like how heavyweight the `bolt` or `slack-edge` packages were so I rolled my own slack api wrapper. It's again fully typed and designed to be as lightweight as possible. The background user update queue processes up to 3 users every 30 seconds to respect Slack's rate limits.
 
 ```typescript
-const slack = new Slack(
-  process.env.SLACK_TOKEN,
+const slack = new SlackWrapper(
+  process.env.SLACK_BOT_TOKEN,
   process.env.SLACK_SIGNING_SECRET,
 );
 
-const user = await slack.getUser("U062UG485EE");
-const emojis = await slack.getEmoji();
+const user = await slack.getUserInfo("U062UG485EE");
+const emojis = await slack.getEmojiList();
 
 // Manually purge a specific user's cache using the API endpoint
 const response = await fetch(
@@ -169,7 +175,7 @@ To create a new migration:
 ```typescript
 // src/migrations/myNewMigration.ts
 import { Database } from "bun:sqlite";
-import { Migration } from "./types";
+import type { Migration } from "./types";
 
 export const myNewMigration: Migration = {
   version: "0.3.2", // Should match package.json version

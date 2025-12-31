@@ -208,17 +208,20 @@ export class MigrationManager {
 		if (parts.length !== 3) return null;
 
 		const [major, minor, patch] = parts.map(Number);
+		if (major === undefined || minor === undefined || patch === undefined) {
+			return null;
+		}
 
 		// If patch > 0, decrement patch
 		if (patch > 0) {
 			return `${major}.${minor}.${patch - 1}`;
 		}
 		// If minor > 0, decrement minor and set patch to 0
-		else if (minor > 0) {
+		if (minor > 0) {
 			return `${major}.${minor - 1}.0`;
 		}
 		// If major > 0, decrement major and set minor and patch to 0
-		else if (major > 0) {
+		if (major > 0) {
 			return `${major - 1}.0.0`;
 		}
 
@@ -236,8 +239,8 @@ export class MigrationManager {
 		const partsB = b.split(".").map(Number);
 
 		for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-			const partA = i < partsA.length ? partsA[i] : 0;
-			const partB = i < partsB.length ? partsB[i] : 0;
+			const partA = partsA[i] ?? 0;
+			const partB = partsB[i] ?? 0;
 
 			if (partA < partB) return -1;
 			if (partA > partB) return 1;
