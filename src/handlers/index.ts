@@ -309,9 +309,12 @@ export const handleGetUserAgents: RouteHandlerWithAnalytics = async (
 	_request,
 	recordAnalytics,
 ) => {
-	const userAgents = await cache.getUserAgents();
+	const [userAgents, totalCount] = await Promise.all([
+		cache.getUserAgents(),
+		cache.getUserAgentCount(),
+	]);
 	await recordAnalytics(200);
-	return Response.json(userAgents);
+	return Response.json({ userAgents, totalCount });
 };
 
 export const handleGetReferers: RouteHandlerWithAnalytics = async (

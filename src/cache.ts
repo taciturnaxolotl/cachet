@@ -1836,6 +1836,19 @@ class Cache {
 	}
 
 	/**
+	 * Gets total count of unique user agents
+	 * @returns Total count of unique user agents
+	 */
+	async getUserAgentCount(): Promise<number> {
+		const result = this.db
+			.query(
+				`SELECT COUNT(*) as count FROM user_agent_stats WHERE user_agent IS NOT NULL`,
+			)
+			.get() as { count: number };
+		return result?.count || 0;
+	}
+
+	/**
 	 * Gets referer stats from cumulative stats table
 	 * @returns Referer host data sorted by hits
 	 */

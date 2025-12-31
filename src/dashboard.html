@@ -736,22 +736,22 @@
         }
 
         const stats = await statsRes.json();
-        const userAgents = await uaRes.json();
+        const uaData = await uaRes.json();
         const referers = await refRes.json();
 
         // Update stats cards
         document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
         document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
         document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(1)}%` : '-';
-        document.getElementById('uniqueAgents').textContent = formatNumber(userAgents.length || 0);
+        document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
 
         // Update chart
         currentTrafficData = trafficData;
         initChart(trafficData);
 
         // Update user agents and referers
-        allUserAgents = userAgents;
-        renderTrafficSources(userAgents, referers);
+        allUserAgents = uaData.userAgents;
+        renderTrafficSources(uaData.userAgents, referers);
         updateLastUpdated();
 
       } catch (e) {
@@ -894,18 +894,18 @@
             return;
           }
           const stats = await statsRes.json();
-          const userAgents = await uaRes.json();
+          const uaData = await uaRes.json();
           const referers = await refRes.json();
           
           document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
           document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
           document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(1)}%` : '-';
-          document.getElementById('uniqueAgents').textContent = formatNumber(userAgents.length || 0);
+          document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
           
           currentTrafficData = trafficData;
           initChart(trafficData);
-          allUserAgents = userAgents;
-          renderTrafficSources(userAgents, referers);
+          allUserAgents = uaData.userAgents;
+          renderTrafficSources(uaData.userAgents, referers);
           updateLastUpdated();
           showLoading(false);
         });

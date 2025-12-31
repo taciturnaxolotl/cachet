@@ -418,17 +418,23 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				{
 					summary: "Get user agents statistics",
 					description:
-						"Cumulative list of user agents accessing the service with hit counts",
+						"Cumulative list of user agents accessing the service with hit counts (top 50) and total unique count",
 					tags: ["Analytics"],
 					responses: Object.fromEntries([
 						apiResponse(200, "User agents data retrieved successfully", {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									userAgent: { type: "string", example: "Mozilla/5.0..." },
-									hits: { type: "number", example: 123 },
+							type: "object",
+							properties: {
+								userAgents: {
+									type: "array",
+									items: {
+										type: "object",
+										properties: {
+											userAgent: { type: "string", example: "Mozilla/5.0..." },
+											hits: { type: "number", example: 123 },
+										},
+									},
 								},
+								totalCount: { type: "number", example: 150 },
 							},
 						}),
 					]),
