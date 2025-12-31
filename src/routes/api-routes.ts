@@ -125,7 +125,8 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				withAnalytics("/users/:id", "GET", handlers.handleGetUser),
 				{
 					summary: "Get user information",
-					description: "Retrieve cached user profile information from Slack",
+					description:
+						"Retrieve cached user profile information from Slack. User data is cached for 7 days before being refreshed.",
 					tags: ["Users"],
 					parameters: {
 						path: [pathParam("id", "string", "Slack user ID", "U062UG485EE")],
@@ -155,7 +156,8 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				withAnalytics("/users/:id/r", "GET", handlers.handleUserRedirect),
 				{
 					summary: "Redirect to user profile image",
-					description: "Direct redirect to the user's cached profile image URL",
+					description:
+						"Direct redirect to the user's cached profile image URL. User data is cached for 7 days.",
 					tags: ["Users"],
 					parameters: {
 						path: [pathParam("id", "string", "Slack user ID", "U062UG485EE")],
