@@ -459,7 +459,9 @@
 
     function formatMs(ms) {
       if (ms === null || ms === undefined) return '-';
-      if (ms < 1) return '<1ms';
+      if (ms < 0.01) return '0ms';
+      if (ms < 1) return `${ms.toFixed(2)}ms`;
+      if (ms < 10) return `${ms.toFixed(1)}ms`;
       if (ms < 1000) return `${Math.round(ms)}ms`;
       return `${(ms / 1000).toFixed(2)}s`;
     }
@@ -742,7 +744,7 @@
         // Update stats cards
         document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
         document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
-        document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(1)}%` : '-';
+        document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(4)}%` : '-';
         document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
 
         // Update chart
@@ -899,7 +901,7 @@
           
           document.getElementById('totalRequests').textContent = formatNumber(stats.totalRequests || 0);
           document.getElementById('avgResponseTime').textContent = formatMs(stats.averageResponseTime);
-          document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(1)}%` : '-';
+          document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(4)}%` : '-';
           document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
           
           currentTrafficData = trafficData;

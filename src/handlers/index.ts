@@ -128,49 +128,12 @@ export const handleUserRedirect: RouteHandlerWithAnalytics = async (
 	const user = await cache.getUser(userId);
 
 	if (!user || !user.imageUrl) {
-		let slackUser: SlackUser;
-		try {
-			slackUser = await slackApp.getUserInfo(userId.toUpperCase());
-		} catch (e) {
-			if (e instanceof Error && e.message === "user_not_found") {
-				console.warn(`⚠️ WARN user not found: ${userId}`);
-
-				await recordAnalytics(307);
-				return new Response(null, {
-					status: 307,
-					headers: {
-						Location:
-							"https://ca.slack-edge.com/T0266FRGM-U0266FRGP-g28a1f281330-512",
-					},
-				});
-			}
-
-			Sentry.withScope((scope) => {
-				scope.setExtra("url", request.url);
-				scope.setExtra("user", userId);
-				Sentry.captureException(e);
-			});
-
-			await recordAnalytics(500);
-			return Response.json(
-				{ message: "Internal server error" },
-				{ status: 500 },
-			);
-		}
-
-		await cache.insertUser(
-			slackUser.id,
-			slackUser.real_name || slackUser.name || "Unknown",
-			slackUser.profile?.pronouns || "",
-			slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
-		);
-
-		await recordAnalytics(302);
+		cache.queueUserUpdate(userId);
+		await recordAnalytics(307);
 		return new Response(null, {
-			status: 302,
+			status: 307,
 			headers: {
-				Location:
-					slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
+				Location: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
 			},
 		});
 	}

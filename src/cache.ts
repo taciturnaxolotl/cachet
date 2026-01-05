@@ -775,9 +775,8 @@ class Cache {
 	/**
 	 * Adds a user to the background update queue
 	 * @param userId User ID to queue for update
-	 * @private
 	 */
-	private queueUserUpdate(userId: string) {
+	queueUserUpdate(userId: string) {
 		this.userUpdateQueue.add(userId.toUpperCase());
 	}
 

@@ -23,6 +23,7 @@ class SlackWrapper {
 	private signingSecret: string;
 	private botToken: string;
 	private limiter: Bottleneck;
+	private requestTimeout: number;
 
 	/**
 	 * Creates a new SlackWrapper instance
@@ -45,6 +46,10 @@ class SlackWrapper {
 			maxConcurrent: Number.isFinite(maxConcurrent) && maxConcurrent > 0 ? maxConcurrent : 3,
 			minTime: Number.isFinite(minTime) && minTime > 0 ? minTime : 200,
 		});
+
+		// Request timeout in ms (default 5 seconds)
+		const timeout = Number(process.env.SLACK_REQUEST_TIMEOUT_MS ?? 5000);
+		this.requestTimeout = Number.isFinite(timeout) && timeout > 0 ? timeout : 5000;
 
 		const missingFields = [];
 		if (!this.signingSecret) missingFields.push("signing secret");
@@ -69,6 +74,7 @@ class SlackWrapper {
 					Authorization: `Bearer ${this.botToken}`,
 					"Content-Type": "application/json",
 				},
+				signal: AbortSignal.timeout(this.requestTimeout),
 			}),
 		);
 
@@ -98,6 +104,7 @@ class SlackWrapper {
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify({ user: userId }),
+				signal: AbortSignal.timeout(this.requestTimeout),
 			}),
 		);
 
@@ -121,6 +128,7 @@ class SlackWrapper {
 					Authorization: `Bearer ${this.botToken}`,
 					"Content-Type": "application/json",
 				},
+				signal: AbortSignal.timeout(this.requestTimeout),
 			}),
 		);
 
