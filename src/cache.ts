@@ -346,6 +346,7 @@ class Cache {
 	private userUpdateQueue: Set<string> = new Set();
 	private isProcessingQueue = false;
 	private slackWrapper?: SlackUserProvider; // Will be injected after construction
+	private currentSessionId?: number;
 
 	/**
 	 * Creates a new Cache instance
@@ -453,6 +454,16 @@ class Cache {
 			) WITHOUT ROWID
 		`);
 
+		// Create uptime tracking table
+		this.db.run(`
+			CREATE TABLE IF NOT EXISTS uptime_sessions (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				start_time INTEGER NOT NULL,
+				end_time INTEGER,
+				duration INTEGER
+			)
+		`);
+
 		// Create indexes for time-range queries
 		this.db.run(
 			"CREATE INDEX IF NOT EXISTS idx_traffic_10min_bucket ON traffic_10min(bucket)",
@@ -487,6 +498,99 @@ class Cache {
 				this.onEmojiExpired();
 			}
 		}
+
+		// Start uptime session tracking
+		this.startUptimeSession();
+	}
+
+	/**
+	 * Starts a new uptime session and closes any orphaned sessions from crashes
+	 * @private
+	 */
+	private startUptimeSession() {
+		const now = Date.now();
+
+		// Find and close any orphaned sessions (from crashes)
+		const orphanedSessions = this.db
+			.query("SELECT id, start_time FROM uptime_sessions WHERE end_time IS NULL")
+			.all() as Array<{ id: number; start_time: number }>;
+
+		for (const session of orphanedSessions) {
+			// Estimate end time from last traffic activity or use start time + 1 minute as fallback
+			const lastActivity = this.db
+				.query("SELECT MAX(bucket) * 1000 as last_bucket FROM traffic_10min")
+				.get() as { last_bucket: number | null };
+
+			const estimatedEnd = lastActivity?.last_bucket && lastActivity.last_bucket > session.start_time
+				? lastActivity.last_bucket
+				: session.start_time + 60000; // Assume at least 1 minute if no activity
+
+			const duration = estimatedEnd - session.start_time;
+			this.db.run(
+				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
+				[estimatedEnd, duration, session.id],
+			);
+			console.log(`Closed orphaned session ${session.id} (likely crash), estimated duration: ${Math.round(duration / 1000)}s`);
+		}
+
+		// Start new session
+		const result = this.db
+			.query("INSERT INTO uptime_sessions (start_time) VALUES (?) RETURNING id")
+			.get(now) as { id: number };
+		this.currentSessionId = result.id;
+	}
+
+	/**
+	 * Ends the current uptime session (call on graceful shutdown)
+	 */
+	endUptimeSession() {
+		if (!this.currentSessionId) return;
+		const now = Date.now();
+		const session = this.db
+			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
+			.get(this.currentSessionId) as { start_time: number } | null;
+		if (session) {
+			const duration = now - session.start_time;
+			this.db.run(
+				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
+				[now, duration, this.currentSessionId],
+			);
+		}
+	}
+
+	/**
+	 * Gets lifetime uptime percentage
+	 * @returns Uptime percentage (0-100)
+	 */
+	getLifetimeUptime(): number {
+		const now = Date.now();
+
+		// Get first session start time
+		const firstSession = this.db
+			.query("SELECT MIN(start_time) as first_start FROM uptime_sessions")
+			.get() as { first_start: number | null };
+
+		if (!firstSession?.first_start) {
+			return 100; // No sessions yet, assume 100%
+		}
+
+		const totalLifetime = now - firstSession.first_start;
+		if (totalLifetime <= 0) return 100;
+
+		// Sum all completed session durations
+		const completedResult = this.db
+			.query("SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL")
+			.get() as { total: number };
+
+		// Add current session duration (still running)
+		const currentSession = this.db
+			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
+			.get(this.currentSessionId) as { start_time: number } | null;
+
+		const currentDuration = currentSession ? now - currentSession.start_time : 0;
+		const totalUptime = completedResult.total + currentDuration;
+
+		return Math.min(100, (totalUptime / totalLifetime) * 100);
 	}
 
 	/**
@@ -1506,7 +1610,7 @@ class Cache {
 				? (redirectRequests / (redirectRequests + dataRequests)) * 100
 				: 0;
 
-		const uptime = Math.max(0, 100 - errorRate * 2);
+		const uptime = this.getLifetimeUptime();
 
 		// Peak traffic analysis from bucket table
 		const peakHourData = this.db
@@ -1664,16 +1768,13 @@ class Cache {
 			.get(alignedCutoff) as { count: number | null };
 
 		const totalCount = totalResult.count ?? 0;
-		const errorRate = totalCount > 0 ? ((errorResult.count ?? 0) / totalCount) * 100 : 0;
-		const uptime = Math.max(0, 100 - errorRate * 2);
-
 		const result = {
 			totalRequests: totalCount,
 			averageResponseTime:
 				avgResponseResult.totalHits && avgResponseResult.totalHits > 0
 					? (avgResponseResult.totalTime ?? 0) / avgResponseResult.totalHits
 					: null,
-			uptime: uptime,
+			uptime: this.getLifetimeUptime(),
 		};
 
 		this.typedAnalyticsCache.setEssentialStatsData(cacheKey, result);

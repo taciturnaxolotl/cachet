@@ -122,4 +122,14 @@ const server = serve({
 
 console.log(`🚀 Server running on http://localhost:${server.port}`);
 
+// Graceful shutdown handling
+const shutdown = () => {
+  console.log("Shutting down gracefully...");
+  cache.endUptimeSession();
+  process.exit(0);
+};
+
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
 export { cache, slackApp };
