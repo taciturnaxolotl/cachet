@@ -333,6 +333,11 @@
       display: none !important;
     }
 
+    .u-select {
+      background: rgba(35, 134, 54, 0.2) !important;
+      border: 1px solid rgba(35, 134, 54, 0.5) !important;
+    }
+
     @media (max-width: 768px) {
       .dashboard {
         padding: 0 1rem 1rem;
@@ -572,7 +577,12 @@
         width: width,
         height: 280,
         cursor: {
-          drag: { x: true, y: false }
+          drag: { x: true, y: false },
+          points: {
+            size: 6,
+            fill: (u, seriesIdx) => u.series[seriesIdx].stroke(),
+            stroke: (u, seriesIdx) => u.series[seriesIdx].stroke(),
+          }
         },
         select: {
           show: true,
@@ -629,7 +639,6 @@
             stroke: '#238636',
             width: 2,
             fill: 'rgba(35, 134, 54, 0.1)',
-            points: { fill: '#238636', stroke: '#238636' },
           },
           {
             label: 'Latency',
@@ -637,7 +646,6 @@
             stroke: 'rgba(249, 115, 22, 0.5)',
             width: 1,
             fill: 'rgba(249, 115, 22, 0.1)',
-            points: { fill: 'rgba(249, 115, 22, 0.5)', stroke: 'rgba(249, 115, 22, 0.5)' },
           }
         ],
         hooks: {
