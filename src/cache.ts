@@ -372,6 +372,9 @@ class Cache {
 		this.defaultExpiration = defaultExpirationHours;
 		this.onEmojiExpired = onEmojiExpired;
 
+		// Optimize SQLite for performance
+		this.optimizeSQLite();
+
 		// Initialize type-safe analytics cache
 		this.typedAnalyticsCache = new AnalyticsCache();
 
@@ -382,6 +385,29 @@ class Cache {
 
 		// Run migrations
 		this.runMigrations();
+	}
+
+	/**
+	 * Optimizes SQLite performance settings
+	 * @private
+	 */
+	private optimizeSQLite() {
+		// Enable Write-Ahead Logging for better concurrency
+		this.db.run("PRAGMA journal_mode = WAL");
+		
+		// NORMAL synchronous mode is faster and still safe with WAL
+		this.db.run("PRAGMA synchronous = NORMAL");
+		
+		// Increase cache size to 64MB for better query performance
+		this.db.run("PRAGMA cache_size = -64000");
+		
+		// Store temporary tables in memory
+		this.db.run("PRAGMA temp_store = MEMORY");
+		
+		// Enable memory-mapped I/O for faster reads (256MB)
+		this.db.run("PRAGMA mmap_size = 268435456");
+		
+		console.log("SQLite performance optimizations applied");
 	}
 
 	/**
