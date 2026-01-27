@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database, type Statement } from "bun:sqlite";
 import { schedule } from "node-cron";
 import { bucketAnalyticsMigration } from "./migrations/bucketAnalyticsMigration";
 import { endpointGroupingMigration } from "./migrations/endpointGroupingMigration";
@@ -348,6 +348,15 @@ class Cache {
 	private slackWrapper?: SlackUserProvider; // Will be injected after construction
 	private currentSessionId?: number;
 
+	// Prepared statements for hot paths
+	private stmtTraffic10min!: Statement;
+	private stmtTrafficHourly!: Statement;
+	private stmtTrafficDaily!: Statement;
+	private stmtUserAgent!: Statement;
+	private stmtReferer!: Statement;
+	private stmtGetUser!: Statement;
+	private stmtGetEmoji!: Statement;
+
 	/**
 	 * Creates a new Cache instance
 	 * @param dbPath Path to SQLite database file
@@ -367,11 +376,63 @@ class Cache {
 		this.typedAnalyticsCache = new AnalyticsCache();
 
 		this.initDatabase();
+		this.initPreparedStatements();
 		this.setupPurgeSchedule();
 		this.startQueueProcessor();
 
 		// Run migrations
 		this.runMigrations();
+	}
+
+	/**
+	 * Initializes prepared statements for hot paths
+	 * @private
+	 */
+	private initPreparedStatements() {
+		// Traffic recording statements
+		this.stmtTraffic10min = this.db.prepare(`
+			INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
+			VALUES (?1, ?2, ?3, 1, ?4)
+			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				hits = hits + 1,
+				total_response_time = total_response_time + ?4
+		`);
+
+		this.stmtTrafficHourly = this.db.prepare(`
+			INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
+			VALUES (?1, ?2, ?3, 1, ?4)
+			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				hits = hits + 1,
+				total_response_time = total_response_time + ?4
+		`);
+
+		this.stmtTrafficDaily = this.db.prepare(`
+			INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
+			VALUES (?1, ?2, ?3, 1, ?4)
+			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+				hits = hits + 1,
+				total_response_time = total_response_time + ?4
+		`);
+
+		this.stmtUserAgent = this.db.prepare(`
+			INSERT INTO user_agent_stats (user_agent, hits, last_seen)
+			VALUES (?1, 1, ?2)
+			ON CONFLICT(user_agent) DO UPDATE SET 
+				hits = hits + 1,
+				last_seen = MAX(last_seen, ?2)
+		`);
+
+		this.stmtReferer = this.db.prepare(`
+			INSERT INTO referer_stats (referer_host, hits, last_seen)
+			VALUES (?1, 1, ?2)
+			ON CONFLICT(referer_host) DO UPDATE SET 
+				hits = hits + 1,
+				last_seen = MAX(last_seen, ?2)
+		`);
+
+		// Cache lookup statements
+		this.stmtGetUser = this.db.prepare("SELECT * FROM users WHERE userId = ?");
+		this.stmtGetEmoji = this.db.prepare("SELECT * FROM emojis WHERE name = ? AND expiration > ?");
 	}
 
 	/**
@@ -1075,9 +1136,7 @@ class Cache {
 	 */
 	async getUser(userId: string): Promise<User | null> {
 		const normalizedId = userId.toUpperCase();
-		const result = this.db
-			.query("SELECT * FROM users WHERE userId = ?")
-			.get(normalizedId) as User;
+		const result = this.stmtGetUser.get(normalizedId) as User;
 
 		if (!result) {
 			return null;
@@ -1129,9 +1188,7 @@ class Cache {
 	 * @returns Emoji object if found and not expired, null otherwise
 	 */
 	async getEmoji(name: string): Promise<Emoji | null> {
-		const result = this.db
-			.query("SELECT * FROM emojis WHERE name = ? AND expiration > ?")
-			.get(name.toLowerCase(), Date.now()) as Emoji;
+		const result = this.stmtGetEmoji.get(name.toLowerCase(), Date.now()) as Emoji;
 
 		return result
 			? {
@@ -1201,58 +1258,21 @@ class Cache {
 				}
 			}
 
-			// Batch all writes in a single transaction for better performance
+			// Batch all writes in a single transaction using prepared statements
 			this.db.transaction(() => {
-				// Upsert into all three bucket tables
-				this.db.run(
-					`INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
-					 VALUES (?1, ?2, ?3, 1, ?4)
-					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-					 	hits = hits + 1,
-					 	total_response_time = total_response_time + ?4`,
-					[bucket10min, endpoint, statusCode, respTime],
-				);
-
-				this.db.run(
-					`INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
-					 VALUES (?1, ?2, ?3, 1, ?4)
-					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-					 	hits = hits + 1,
-					 	total_response_time = total_response_time + ?4`,
-					[bucketHour, endpoint, statusCode, respTime],
-				);
-
-				this.db.run(
-					`INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
-					 VALUES (?1, ?2, ?3, 1, ?4)
-					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-					 	hits = hits + 1,
-					 	total_response_time = total_response_time + ?4`,
-					[bucketDay, endpoint, statusCode, respTime],
-				);
+				// Upsert into all three bucket tables using prepared statements
+				this.stmtTraffic10min.run(bucket10min, endpoint, statusCode, respTime);
+				this.stmtTrafficHourly.run(bucketHour, endpoint, statusCode, respTime);
+				this.stmtTrafficDaily.run(bucketDay, endpoint, statusCode, respTime);
 
 				// Track user agent
 				if (userAgent) {
-					this.db.run(
-						`INSERT INTO user_agent_stats (user_agent, hits, last_seen)
-						 VALUES (?1, 1, ?2)
-						 ON CONFLICT(user_agent) DO UPDATE SET 
-						 	hits = hits + 1,
-						 	last_seen = MAX(last_seen, ?2)`,
-						[userAgent, nowMs],
-					);
+					this.stmtUserAgent.run(userAgent, nowMs);
 				}
 
 				// Track referer
 				if (refererHost) {
-					this.db.run(
-						`INSERT INTO referer_stats (referer_host, hits, last_seen)
-						 VALUES (?1, 1, ?2)
-						 ON CONFLICT(referer_host) DO UPDATE SET 
-						 	hits = hits + 1,
-						 	last_seen = MAX(last_seen, ?2)`,
-						[refererHost, nowMs],
-					);
+					this.stmtReferer.run(refererHost, nowMs);
 				}
 			})();
 		} catch (error) {
