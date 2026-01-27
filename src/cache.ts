@@ -1787,12 +1787,12 @@ class Cache {
 			)
 			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
 
-		// Error rate from bucket table
-		const errorResult = this.db
+		// Error rate from bucket table (query kept for potential future use)
+		this.db
 			.query(
 				`SELECT SUM(hits) as count FROM ${table} WHERE bucket >= ? AND status_code >= 400 AND endpoint != '/stats'`,
 			)
-			.get(alignedCutoff) as { count: number | null };
+			.get(alignedCutoff);
 
 		const totalCount = totalResult.count ?? 0;
 		const result = {

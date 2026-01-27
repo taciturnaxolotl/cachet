@@ -299,7 +299,7 @@ export const handleGetTraffic: RouteHandlerWithAnalytics = async (
 	const startParam = params.get("start");
 	const endParam = params.get("end");
 
-	let options: { days?: number; startTime?: number; endTime?: number } = {};
+	const options: { days?: number; startTime?: number; endTime?: number } = {};
 
 	if (startParam && endParam) {
 		const start = parsePositiveInt(startParam, 0);
