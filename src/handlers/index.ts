@@ -44,20 +44,20 @@ export const handleHealthCheck: RouteHandlerWithAnalytics = async (
 				: health.status === "degraded"
 					? 200
 					: 200;
-		await recordAnalytics(statusCode);
+		recordAnalytics(statusCode);
 		return Response.json(health, { status: statusCode });
 	}
 
 	const isHealthy = await cache.healthCheck();
 	if (isHealthy) {
-		await recordAnalytics(200);
+		recordAnalytics(200);
 		return Response.json({
 			status: "healthy",
 			cache: true,
 			uptime: process.uptime(),
 		});
 	} else {
-		await recordAnalytics(503);
+		recordAnalytics(503);
 		return Response.json(
 			{ status: "unhealthy", error: "Cache connection failed" },
 			{ status: 503 },
@@ -79,7 +79,7 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 			slackUser = await slackApp.getUserInfo(userId);
 		} catch (e) {
 			if (e instanceof Error && e.message === "user_not_found") {
-				await recordAnalytics(404);
+				recordAnalytics(404);
 				return Response.json({ message: "User not found" }, { status: 404 });
 			}
 
@@ -89,7 +89,7 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 				Sentry.captureException(e);
 			});
 
-			await recordAnalytics(500);
+			recordAnalytics(500);
 			return Response.json(
 				{ message: "Internal server error" },
 				{ status: 500 },
@@ -103,7 +103,7 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 			slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
 		);
 
-		await recordAnalytics(200);
+		recordAnalytics(200);
 		return Response.json({
 			id: slackUser.id,
 			userId: slackUser.id,
@@ -114,7 +114,7 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 		});
 	}
 
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(user);
 };
 
@@ -129,7 +129,7 @@ export const handleUserRedirect: RouteHandlerWithAnalytics = async (
 
 	if (!user || !user.imageUrl) {
 		cache.queueUserUpdate(userId);
-		await recordAnalytics(307);
+		recordAnalytics(307);
 		return new Response(null, {
 			status: 307,
 			headers: {
@@ -138,7 +138,7 @@ export const handleUserRedirect: RouteHandlerWithAnalytics = async (
 		});
 	}
 
-	await recordAnalytics(302);
+	recordAnalytics(302);
 	return new Response(null, {
 		status: 302,
 		headers: { Location: user.imageUrl },
@@ -152,13 +152,13 @@ export const handlePurgeUser: RouteHandlerWithAnalytics = async (
 	const configuredToken = process.env.BEARER_TOKEN;
 	if (!configuredToken) {
 		console.error("BEARER_TOKEN is not configured");
-		await recordAnalytics(500);
+		recordAnalytics(500);
 		return new Response("Server misconfigured", { status: 500 });
 	}
 
 	const authHeader = request.headers.get("authorization") || "";
 	if (authHeader !== `Bearer ${configuredToken}`) {
-		await recordAnalytics(401);
+		recordAnalytics(401);
 		return new Response("Unauthorized", { status: 401 });
 	}
 
@@ -166,7 +166,7 @@ export const handlePurgeUser: RouteHandlerWithAnalytics = async (
 	const userId = url.pathname.split("/")[2] || "";
 	const result = await cache.purgeUserCache(userId);
 
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json({
 		message: "User cache purged",
 		userId,
@@ -179,7 +179,7 @@ export const handleListEmojis: RouteHandlerWithAnalytics = async (
 	recordAnalytics,
 ) => {
 	const emojis = await cache.getAllEmojis();
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(emojis);
 };
 
@@ -192,11 +192,11 @@ export const handleGetEmoji: RouteHandlerWithAnalytics = async (
 	const emoji = await cache.getEmoji(emojiName);
 
 	if (!emoji) {
-		await recordAnalytics(404);
+		recordAnalytics(404);
 		return Response.json({ message: "Emoji not found" }, { status: 404 });
 	}
 
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(emoji);
 };
 
@@ -210,11 +210,11 @@ export const handleEmojiRedirect: RouteHandlerWithAnalytics = async (
 	const emoji = await cache.getEmoji(emojiName);
 
 	if (!emoji) {
-		await recordAnalytics(404);
+		recordAnalytics(404);
 		return Response.json({ message: "Emoji not found" }, { status: 404 });
 	}
 
-	await recordAnalytics(302);
+	recordAnalytics(302);
 	return new Response(null, {
 		status: 302,
 		headers: { Location: emoji.imageUrl },
@@ -228,17 +228,17 @@ export const handleResetCache: RouteHandlerWithAnalytics = async (
 	const configuredToken = process.env.BEARER_TOKEN;
 	if (!configuredToken) {
 		console.error("BEARER_TOKEN is not configured");
-		await recordAnalytics(500);
+		recordAnalytics(500);
 		return new Response("Server misconfigured", { status: 500 });
 	}
 
 	const authHeader = request.headers.get("authorization") || "";
 	if (authHeader !== `Bearer ${configuredToken}`) {
-		await recordAnalytics(401);
+		recordAnalytics(401);
 		return new Response("Unauthorized", { status: 401 });
 	}
 	const result = await cache.purgeAll();
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(result);
 };
 
@@ -251,7 +251,7 @@ export const handleGetEssentialStats: RouteHandlerWithAnalytics = async (
 	const days = parsePositiveInt(params.get("days"), 7);
 
 	const stats = await cache.getEssentialStats(days);
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(stats);
 };
 
@@ -264,7 +264,7 @@ export const handleGetChartData: RouteHandlerWithAnalytics = async (
 	const days = parsePositiveInt(params.get("days"), 7);
 
 	const chartData = await cache.getChartData(days);
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(chartData);
 };
 
@@ -276,7 +276,7 @@ export const handleGetUserAgents: RouteHandlerWithAnalytics = async (
 		cache.getUserAgents(),
 		cache.getUserAgentCount(),
 	]);
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json({ userAgents, totalCount });
 };
 
@@ -285,7 +285,7 @@ export const handleGetReferers: RouteHandlerWithAnalytics = async (
 	recordAnalytics,
 ) => {
 	const referers = await cache.getReferers();
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(referers);
 };
 
@@ -315,7 +315,7 @@ export const handleGetTraffic: RouteHandlerWithAnalytics = async (
 	}
 
 	const traffic = cache.getTraffic(options);
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json(traffic);
 };
 
@@ -333,7 +333,7 @@ export const handleGetStats: RouteHandlerWithAnalytics = async (
 		cache.getUserAgents(),
 	]);
 
-	await recordAnalytics(200);
+	recordAnalytics(200);
 	return Response.json({
 		...essentialStats,
 		chartData,

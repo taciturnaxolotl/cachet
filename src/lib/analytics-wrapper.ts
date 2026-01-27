@@ -6,7 +6,7 @@ import type { SlackCache } from "../cache";
 
 // Cache will be injected by the route system
 
-export type AnalyticsRecorder = (statusCode: number) => Promise<void>;
+export type AnalyticsRecorder = (statusCode: number) => void;
 export type RouteHandlerWithAnalytics = (
 	request: Request,
 	recordAnalytics: AnalyticsRecorder,
@@ -24,7 +24,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 		return async (request: Request): Promise<Response> => {
 			const startTime = Date.now();
 
-			const recordAnalytics: AnalyticsRecorder = async (statusCode: number) => {
+			const recordAnalytics: AnalyticsRecorder = (statusCode: number) => {
 				const userAgent = request.headers.get("user-agent") || "";
 				const ipAddress =
 					request.headers.get("x-forwarded-for") ||
@@ -36,7 +36,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				const requestUrl = new URL(request.url);
 				const analyticsPath = path.includes(":") ? requestUrl.pathname : path;
 
-				await cache.recordRequest(
+				cache.recordRequest(
 					analyticsPath,
 					method,
 					statusCode,

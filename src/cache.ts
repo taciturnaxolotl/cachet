@@ -1174,7 +1174,7 @@ class Cache {
 	 * @param responseTime Response time in milliseconds
 	 * @param referer Referer header value
 	 */
-	async recordRequest(
+	recordRequest(
 		endpoint: string,
 		_method: string,
 		statusCode: number,
@@ -1182,72 +1182,79 @@ class Cache {
 		_ipAddress?: string,
 		responseTime?: number,
 		referer?: string,
-	): Promise<void> {
+	): void {
 		try {
 			const now = Math.floor(Date.now() / 1000);
 			const bucket10min = now - (now % 600);
 			const bucketHour = now - (now % 3600);
 			const bucketDay = now - (now % 86400);
 			const respTime = responseTime || 0;
+			const nowMs = Date.now();
 
-			// Upsert into all three bucket tables
-			this.db.run(
-				`INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
-				 VALUES (?1, ?2, ?3, 1, ?4)
-				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				 	hits = hits + 1,
-				 	total_response_time = total_response_time + ?4`,
-				[bucket10min, endpoint, statusCode, respTime],
-			);
-
-			this.db.run(
-				`INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
-				 VALUES (?1, ?2, ?3, 1, ?4)
-				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				 	hits = hits + 1,
-				 	total_response_time = total_response_time + ?4`,
-				[bucketHour, endpoint, statusCode, respTime],
-			);
-
-			this.db.run(
-				`INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
-				 VALUES (?1, ?2, ?3, 1, ?4)
-				 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				 	hits = hits + 1,
-				 	total_response_time = total_response_time + ?4`,
-				[bucketDay, endpoint, statusCode, respTime],
-			);
-
-			// Track user agent
-			if (userAgent) {
-				this.db.run(
-					`INSERT INTO user_agent_stats (user_agent, hits, last_seen)
-					 VALUES (?1, 1, ?2)
-					 ON CONFLICT(user_agent) DO UPDATE SET 
-					 	hits = hits + 1,
-					 	last_seen = MAX(last_seen, ?2)`,
-					[userAgent, Date.now()],
-				);
-			}
-
-			// Track referer (extract host only)
+			// Parse referer host outside transaction
+			let refererHost: string | null = null;
 			if (referer) {
 				try {
-					const refererHost = new URL(referer).host;
-					if (refererHost) {
-						this.db.run(
-							`INSERT INTO referer_stats (referer_host, hits, last_seen)
-							 VALUES (?1, 1, ?2)
-							 ON CONFLICT(referer_host) DO UPDATE SET 
-							 	hits = hits + 1,
-							 	last_seen = MAX(last_seen, ?2)`,
-							[refererHost, Date.now()],
-						);
-					}
+					refererHost = new URL(referer).host || null;
 				} catch {
 					// Invalid URL, skip
 				}
 			}
+
+			// Batch all writes in a single transaction for better performance
+			this.db.transaction(() => {
+				// Upsert into all three bucket tables
+				this.db.run(
+					`INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
+					 VALUES (?1, ?2, ?3, 1, ?4)
+					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+					 	hits = hits + 1,
+					 	total_response_time = total_response_time + ?4`,
+					[bucket10min, endpoint, statusCode, respTime],
+				);
+
+				this.db.run(
+					`INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
+					 VALUES (?1, ?2, ?3, 1, ?4)
+					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+					 	hits = hits + 1,
+					 	total_response_time = total_response_time + ?4`,
+					[bucketHour, endpoint, statusCode, respTime],
+				);
+
+				this.db.run(
+					`INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
+					 VALUES (?1, ?2, ?3, 1, ?4)
+					 ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
+					 	hits = hits + 1,
+					 	total_response_time = total_response_time + ?4`,
+					[bucketDay, endpoint, statusCode, respTime],
+				);
+
+				// Track user agent
+				if (userAgent) {
+					this.db.run(
+						`INSERT INTO user_agent_stats (user_agent, hits, last_seen)
+						 VALUES (?1, 1, ?2)
+						 ON CONFLICT(user_agent) DO UPDATE SET 
+						 	hits = hits + 1,
+						 	last_seen = MAX(last_seen, ?2)`,
+						[userAgent, nowMs],
+					);
+				}
+
+				// Track referer
+				if (refererHost) {
+					this.db.run(
+						`INSERT INTO referer_stats (referer_host, hits, last_seen)
+						 VALUES (?1, 1, ?2)
+						 ON CONFLICT(referer_host) DO UPDATE SET 
+						 	hits = hits + 1,
+						 	last_seen = MAX(last_seen, ?2)`,
+						[refererHost, nowMs],
+					);
+				}
+			})();
 		} catch (error) {
 			console.error("Error recording request analytics:", error);
 		}
