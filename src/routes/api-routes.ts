@@ -535,14 +535,24 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 
 		"/stats/essential": {
 			GET: createRoute(
-				withAnalytics("/stats/essential", "GET", handlers.handleGetEssentialStats),
+				withAnalytics(
+					"/stats/essential",
+					"GET",
+					handlers.handleGetEssentialStats,
+				),
 				{
 					summary: "Get essential stats",
 					description: "Fast-loading essential statistics for the dashboard",
 					tags: ["Analytics"],
 					parameters: {
 						query: [
-							queryParam("days", "number", "Number of days to analyze", false, 7),
+							queryParam(
+								"days",
+								"number",
+								"Number of days to analyze",
+								false,
+								7,
+							),
 						],
 					},
 					responses: Object.fromEntries([
@@ -587,7 +597,8 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 				withAnalytics("/stats/referers", "GET", handlers.handleGetReferers),
 				{
 					summary: "Get referer sources",
-					description: "Cumulative referer host statistics showing traffic sources",
+					description:
+						"Cumulative referer host statistics showing traffic sources",
 					tags: ["Analytics"],
 					responses: Object.fromEntries([
 						apiResponse(200, "Referers retrieved", {

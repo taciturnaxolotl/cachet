@@ -43,13 +43,15 @@ class SlackWrapper {
 		const maxConcurrent = Number(process.env.SLACK_MAX_CONCURRENT ?? 3);
 		const minTime = Number(process.env.SLACK_MIN_TIME_MS ?? 200); // ~5 requests per second
 		this.limiter = new Bottleneck({
-			maxConcurrent: Number.isFinite(maxConcurrent) && maxConcurrent > 0 ? maxConcurrent : 3,
+			maxConcurrent:
+				Number.isFinite(maxConcurrent) && maxConcurrent > 0 ? maxConcurrent : 3,
 			minTime: Number.isFinite(minTime) && minTime > 0 ? minTime : 200,
 		});
 
 		// Request timeout in ms (default 5 seconds)
 		const timeout = Number(process.env.SLACK_REQUEST_TIMEOUT_MS ?? 5000);
-		this.requestTimeout = Number.isFinite(timeout) && timeout > 0 ? timeout : 5000;
+		this.requestTimeout =
+			Number.isFinite(timeout) && timeout > 0 ? timeout : 5000;
 
 		const missingFields = [];
 		if (!this.signingSecret) missingFields.push("signing secret");

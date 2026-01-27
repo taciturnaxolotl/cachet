@@ -394,19 +394,19 @@ class Cache {
 	private optimizeSQLite() {
 		// Enable Write-Ahead Logging for better concurrency
 		this.db.run("PRAGMA journal_mode = WAL");
-		
+
 		// NORMAL synchronous mode is faster and still safe with WAL
 		this.db.run("PRAGMA synchronous = NORMAL");
-		
+
 		// Increase cache size to 64MB for better query performance
 		this.db.run("PRAGMA cache_size = -64000");
-		
+
 		// Store temporary tables in memory
 		this.db.run("PRAGMA temp_store = MEMORY");
-		
+
 		// Enable memory-mapped I/O for faster reads (256MB)
 		this.db.run("PRAGMA mmap_size = 268435456");
-		
+
 		console.log("SQLite performance optimizations applied");
 	}
 
@@ -458,7 +458,9 @@ class Cache {
 
 		// Cache lookup statements
 		this.stmtGetUser = this.db.prepare("SELECT * FROM users WHERE userId = ?");
-		this.stmtGetEmoji = this.db.prepare("SELECT * FROM emojis WHERE name = ? AND expiration > ?");
+		this.stmtGetEmoji = this.db.prepare(
+			"SELECT * FROM emojis WHERE name = ? AND expiration > ?",
+		);
 	}
 
 	/**
@@ -599,7 +601,9 @@ class Cache {
 
 		// Find and close any orphaned sessions (from crashes)
 		const orphanedSessions = this.db
-			.query("SELECT id, start_time FROM uptime_sessions WHERE end_time IS NULL")
+			.query(
+				"SELECT id, start_time FROM uptime_sessions WHERE end_time IS NULL",
+			)
 			.all() as Array<{ id: number; start_time: number }>;
 
 		for (const session of orphanedSessions) {
@@ -608,16 +612,20 @@ class Cache {
 				.query("SELECT MAX(bucket) * 1000 as last_bucket FROM traffic_10min")
 				.get() as { last_bucket: number | null };
 
-			const estimatedEnd = lastActivity?.last_bucket && lastActivity.last_bucket > session.start_time
-				? lastActivity.last_bucket
-				: session.start_time + 60000; // Assume at least 1 minute if no activity
+			const estimatedEnd =
+				lastActivity?.last_bucket &&
+				lastActivity.last_bucket > session.start_time
+					? lastActivity.last_bucket
+					: session.start_time + 60000; // Assume at least 1 minute if no activity
 
 			const duration = estimatedEnd - session.start_time;
 			this.db.run(
 				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
 				[estimatedEnd, duration, session.id],
 			);
-			console.log(`Closed orphaned session ${session.id} (likely crash), estimated duration: ${Math.round(duration / 1000)}s`);
+			console.log(
+				`Closed orphaned session ${session.id} (likely crash), estimated duration: ${Math.round(duration / 1000)}s`,
+			);
 		}
 
 		// Start new session
@@ -666,7 +674,9 @@ class Cache {
 
 		// Sum all completed session durations
 		const completedResult = this.db
-			.query("SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL")
+			.query(
+				"SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL",
+			)
 			.get() as { total: number };
 
 		// Add current session duration (still running)
@@ -674,7 +684,9 @@ class Cache {
 			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
 			.get(this.currentSessionId) as { start_time: number } | null;
 
-		const currentDuration = currentSession ? now - currentSession.start_time : 0;
+		const currentDuration = currentSession
+			? now - currentSession.start_time
+			: 0;
 		const totalUptime = completedResult.total + currentDuration;
 
 		return Math.min(100, (totalUptime / totalLifetime) * 100);
@@ -1214,7 +1226,10 @@ class Cache {
 	 * @returns Emoji object if found and not expired, null otherwise
 	 */
 	async getEmoji(name: string): Promise<Emoji | null> {
-		const result = this.stmtGetEmoji.get(name.toLowerCase(), Date.now()) as Emoji;
+		const result = this.stmtGetEmoji.get(
+			name.toLowerCase(),
+			Date.now(),
+		) as Emoji;
 
 		return result
 			? {
@@ -1334,15 +1349,30 @@ class Cache {
 			return "API Documentation";
 		} else if (endpoint === "/emojis") {
 			return "Emoji List";
-		} else if (endpoint.match(/^\/emojis\/[^/]+$/) || endpoint === "/emojis/EMOJI_NAME") {
+		} else if (
+			endpoint.match(/^\/emojis\/[^/]+$/) ||
+			endpoint === "/emojis/EMOJI_NAME"
+		) {
 			return "Emoji Data";
-		} else if (endpoint.match(/^\/emojis\/[^/]+\/r$/) || endpoint === "/emojis/EMOJI_NAME/r") {
+		} else if (
+			endpoint.match(/^\/emojis\/[^/]+\/r$/) ||
+			endpoint === "/emojis/EMOJI_NAME/r"
+		) {
 			return "Emoji Redirects";
-		} else if (endpoint.match(/^\/users\/[^/]+$/) || endpoint === "/users/USER_ID") {
+		} else if (
+			endpoint.match(/^\/users\/[^/]+$/) ||
+			endpoint === "/users/USER_ID"
+		) {
 			return "User Data";
-		} else if (endpoint.match(/^\/users\/[^/]+\/r$/) || endpoint === "/users/USER_ID/r") {
+		} else if (
+			endpoint.match(/^\/users\/[^/]+\/r$/) ||
+			endpoint === "/users/USER_ID/r"
+		) {
 			return "User Redirects";
-		} else if (endpoint.match(/^\/users\/[^/]+\/purge$/) || endpoint === "/reset") {
+		} else if (
+			endpoint.match(/^\/users\/[^/]+\/purge$/) ||
+			endpoint === "/reset"
+		) {
 			return "Cache Management";
 		} else if (endpoint.includes("/users/") && endpoint.includes("/r")) {
 			return "User Redirects";
@@ -1570,7 +1600,10 @@ class Cache {
          WHERE bucket >= ? AND endpoint != '/stats'
        `,
 			)
-			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
+			.get(alignedCutoff) as {
+			totalTime: number | null;
+			totalHits: number | null;
+		};
 
 		const averageResponseTime =
 			avgResponseResult.totalHits && avgResponseResult.totalHits > 0
@@ -1599,7 +1632,11 @@ class Cache {
 			p99: null as number | null,
 		};
 
-		const distribution: Array<{ range: string; count: number; percentage: number }> = [];
+		const distribution: Array<{
+			range: string;
+			count: number;
+			percentage: number;
+		}> = [];
 
 		// Slowest endpoints from grouped data
 		const slowestEndpoints = requestsByEndpoint
@@ -1811,7 +1848,10 @@ class Cache {
 			.query(
 				`SELECT SUM(total_response_time) as totalTime, SUM(hits) as totalHits FROM ${table} WHERE bucket >= ? AND endpoint != '/stats' AND total_response_time > 0`,
 			)
-			.get(alignedCutoff) as { totalTime: number | null; totalHits: number | null };
+			.get(alignedCutoff) as {
+			totalTime: number | null;
+			totalHits: number | null;
+		};
 
 		// Error rate from bucket table (query kept for potential future use)
 		this.db
@@ -1915,11 +1955,9 @@ class Cache {
 	 * @param options - Either days for relative range, or start/end for absolute range
 	 * @returns Array of bucket data points with hits and latency
 	 */
-	getTraffic(options: {
-		days?: number;
-		startTime?: number;
-		endTime?: number;
-	} = {}): Array<{ bucket: number; hits: number; avgLatency: number | null }> {
+	getTraffic(
+		options: { days?: number; startTime?: number; endTime?: number } = {},
+	): Array<{ bucket: number; hits: number; avgLatency: number | null }> {
 		const now = Math.floor(Date.now() / 1000);
 		let start: number;
 		let end: number;
@@ -1951,14 +1989,14 @@ class Cache {
 				ORDER BY bucket ASC
 			`,
 			)
-			.all(alignedStart, end) as Array<{ 
-				bucket: number; 
-				hits: number; 
-				totalTime: number;
-				hitsWithTime: number;
-			}>;
+			.all(alignedStart, end) as Array<{
+			bucket: number;
+			hits: number;
+			totalTime: number;
+			hitsWithTime: number;
+		}>;
 
-		return results.map(r => ({
+		return results.map((r) => ({
 			bucket: r.bucket,
 			hits: r.hits,
 			avgLatency: r.hitsWithTime > 0 ? r.totalTime / r.hitsWithTime : null,

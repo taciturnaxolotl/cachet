@@ -188,7 +188,9 @@ export const bucketAnalyticsMigration: Migration = {
 		db.run("DROP TABLE IF EXISTS request_analytics");
 
 		// Note: VACUUM cannot run inside a transaction, run manually after migration if needed
-		console.log("Bucket analytics migration completed (run VACUUM manually to reclaim space)");
+		console.log(
+			"Bucket analytics migration completed (run VACUUM manually to reclaim space)",
+		);
 	},
 
 	async down(db: Database): Promise<void> {
