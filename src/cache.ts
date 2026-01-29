@@ -570,14 +570,6 @@ class Cache {
 			"CREATE INDEX IF NOT EXISTS idx_referer_hits ON referer_stats(hits DESC)",
 		);
 
-		// Enable WAL mode for better concurrent performance
-		this.db.run("PRAGMA journal_mode = WAL");
-		this.db.run("PRAGMA synchronous = NORMAL");
-		this.db.run("PRAGMA cache_size = 50000"); // Increased cache size
-		this.db.run("PRAGMA temp_store = memory");
-		this.db.run("PRAGMA mmap_size = 268435456"); // 256MB memory map
-		this.db.run("PRAGMA page_size = 4096"); // Optimal page size
-
 		// check if there are any emojis in the db
 		if (this.onEmojiExpired) {
 			const result = this.db
@@ -1299,23 +1291,21 @@ class Cache {
 				}
 			}
 
-			// Batch all writes in a single transaction using prepared statements
-			this.db.transaction(() => {
-				// Upsert into all three bucket tables using prepared statements
-				this.stmtTraffic10min.run(bucket10min, endpoint, statusCode, respTime);
-				this.stmtTrafficHourly.run(bucketHour, endpoint, statusCode, respTime);
-				this.stmtTrafficDaily.run(bucketDay, endpoint, statusCode, respTime);
+			// Use prepared statements without transaction wrapper for lower latency
+			// WAL mode allows concurrent writes, and prepared statements are pre-compiled
+			this.stmtTraffic10min.run(bucket10min, endpoint, statusCode, respTime);
+			this.stmtTrafficHourly.run(bucketHour, endpoint, statusCode, respTime);
+			this.stmtTrafficDaily.run(bucketDay, endpoint, statusCode, respTime);
 
-				// Track user agent
-				if (userAgent) {
-					this.stmtUserAgent.run(userAgent, nowMs);
-				}
+			// Track user agent
+			if (userAgent) {
+				this.stmtUserAgent.run(userAgent, nowMs);
+			}
 
-				// Track referer
-				if (refererHost) {
-					this.stmtReferer.run(refererHost, nowMs);
-				}
-			})();
+			// Track referer
+			if (refererHost) {
+				this.stmtReferer.run(refererHost, nowMs);
+			}
 		} catch (error) {
 			console.error("Error recording request analytics:", error);
 		}
