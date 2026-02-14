@@ -348,6 +348,13 @@ class Cache {
 	private slackWrapper?: SlackUserProvider; // Will be injected after construction
 	private currentSessionId?: number;
 
+	// Touch-refresh queue for async non-blocking updates
+	private touchRefreshQueue: Array<{
+		newExpiration: number;
+		normalizedId: string;
+	}> = [];
+	private isFlushingTouchRefresh = false;
+
 	// Prepared statements for hot paths
 	private stmtTraffic10min!: Statement;
 	private stmtTrafficHourly!: Statement;
@@ -382,6 +389,7 @@ class Cache {
 		this.initPreparedStatements();
 		this.setupPurgeSchedule();
 		this.startQueueProcessor();
+		this.startTouchRefreshFlush();
 
 		// Run migrations
 		this.runMigrations();
@@ -987,6 +995,31 @@ class Cache {
 	}
 
 	/**
+	 * Starts the touch-refresh flush timer (no-op, using microtasks instead)
+	 * @private
+	 */
+	private startTouchRefreshFlush() {
+		// No timer needed - using queueMicrotask for immediate async execution
+	}
+
+	/**
+	 * Flushes a single touch-refresh update asynchronously using microtask
+	 * @private
+	 */
+	private flushTouchRefresh(newExpiration: number, normalizedId: string) {
+		queueMicrotask(() => {
+			try {
+				this.db.run("UPDATE users SET expiration = ? WHERE userId = ?", [
+					newExpiration,
+					normalizedId,
+				]);
+			} catch (error) {
+				console.error("Error in touch-refresh update:", error);
+			}
+		});
+	}
+
+	/**
 	 * Processes the user update queue with rate limiting
 	 * @private
 	 */
@@ -1188,10 +1221,9 @@ class Cache {
 		if (userAge < twentyFourHoursAgo) {
 			// Extend TTL by another 7 days from now
 			const newExpiration = now + 7 * 24 * 60 * 60 * 1000;
-			this.db.run("UPDATE users SET expiration = ? WHERE userId = ?", [
-				newExpiration,
-				normalizedId,
-			]);
+
+			// Flush the UPDATE asynchronously using microtask (non-blocking)
+			this.flushTouchRefresh(newExpiration, normalizedId);
 
 			// Queue for background update to get fresh data
 			this.queueUserUpdate(normalizedId);
@@ -1281,7 +1313,7 @@ class Cache {
 			const respTime = responseTime || 0;
 			const nowMs = Date.now();
 
-			// Parse referer host outside transaction
+			// Parse referer host
 			let refererHost: string | null = null;
 			if (referer) {
 				try {
@@ -1291,8 +1323,8 @@ class Cache {
 				}
 			}
 
-			// Use prepared statements without transaction wrapper for lower latency
-			// WAL mode allows concurrent writes, and prepared statements are pre-compiled
+			// Use prepared statements - these are FAST with WAL mode
+			// WAL allows concurrent reads during these writes
 			this.stmtTraffic10min.run(bucket10min, endpoint, statusCode, respTime);
 			this.stmtTrafficHourly.run(bucketHour, endpoint, statusCode, respTime);
 			this.stmtTrafficDaily.run(bucketDay, endpoint, statusCode, respTime);
