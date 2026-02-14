@@ -28,7 +28,6 @@ SLACK_BOT_TOKEN=xoxb-your-bot-token-here
 SLACK_SIGNING_SECRET=12345678901234567890123456789012
 NODE_ENV=production
 BEARER_TOKEN=your-secure-random-token-here # Required for admin endpoints
-SENTRY_DSN="https://xxxxx@xxxx.ingest.us.sentry.io/123456" # Optional
 DATABASE_PATH=/path/to/db.sqlite # Optional
 PORT=3000 # Optional
 

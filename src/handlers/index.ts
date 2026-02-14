@@ -2,7 +2,6 @@
  * All route handler functions extracted for reuse
  */
 
-import * as Sentry from "@sentry/bun";
 // These will be injected by the route system
 import type { SlackCache } from "../cache";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
@@ -82,12 +81,6 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 				recordAnalytics(404);
 				return Response.json({ message: "User not found" }, { status: 404 });
 			}
-
-			Sentry.withScope((scope) => {
-				scope.setExtra("url", request.url);
-				scope.setExtra("user", userId);
-				Sentry.captureException(e);
-			});
 
 			recordAnalytics(500);
 			return Response.json(

@@ -1,4 +1,3 @@
-import * as Sentry from "@sentry/bun";
 import { serve } from "bun";
 import { getEmojiUrl } from "../utils/emojiHelper";
 import { SlackCache } from "./cache";
@@ -7,19 +6,6 @@ import { buildRoutes, getSwaggerSpec } from "./lib/route-builder";
 import { createApiRoutes } from "./routes/api-routes";
 import { SlackWrapper } from "./slackWrapper";
 import swagger from "./swagger.html";
-
-// Initialize Sentry if DSN is provided
-if (process.env.SENTRY_DSN) {
-	console.log("Sentry DSN provided, error monitoring is enabled");
-	Sentry.init({
-		environment: process.env.NODE_ENV,
-		dsn: process.env.SENTRY_DSN,
-		tracesSampleRate: 0.5,
-		ignoreErrors: ["Not Found", "404", "user_not_found", "emoji_not_found"],
-	});
-} else {
-	console.warn("Sentry DSN not provided, error monitoring is disabled");
-}
 
 // Initialize SlackWrapper and Cache
 const slackApp = new SlackWrapper();
