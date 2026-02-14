@@ -62,6 +62,11 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 			const startTime = Date.now();
 
 			const recordAnalytics: AnalyticsRecorder = (statusCode: number) => {
+				// Skip analytics entirely for health checks to reduce database load
+				if (path === "/health") {
+					return;
+				}
+
 				const userAgent = request.headers.get("user-agent") || "";
 				const ipAddress =
 					request.headers.get("x-forwarded-for") ||

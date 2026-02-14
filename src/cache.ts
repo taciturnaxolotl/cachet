@@ -355,6 +355,38 @@ class Cache {
 	}> = [];
 	private isFlushingTouchRefresh = false;
 
+	// Cached Slack API health check result (60 second TTL)
+	private slackHealthCache: { status: boolean; error?: string; timestamp: number } | null = null;
+	private slackHealthCacheTTL = 60000; // 60 seconds
+
+	// Cached detailed health check response (5 second TTL for high-load scenarios)
+	private detailedHealthCache: {
+		response: {
+			status: "healthy" | "degraded" | "unhealthy";
+			checks: {
+				database: { status: boolean; latency?: number };
+				slackApi: { status: boolean; error?: string };
+				queueDepth: number;
+				memoryUsage: {
+					heapUsed: number;
+					heapTotal: number;
+					percentage: number;
+					details?: {
+						heapUsedMiB: number;
+						heapTotalMiB: number;
+						heapPercent: number;
+						rssMiB: number;
+						externalMiB: number;
+						arrayBuffersMiB: number;
+					};
+				};
+			};
+			uptime: number;
+		};
+		timestamp: number;
+	} | null = null;
+	private detailedHealthCacheTTL = 5000; // 5 seconds
+
 	// Prepared statements for hot paths
 	private stmtTraffic10min!: Statement;
 	private stmtTrafficHourly!: Statement;
@@ -872,6 +904,11 @@ class Cache {
 		};
 		uptime: number;
 	}> {
+		// Return cached response if valid (reduces load under high traffic)
+		const now = Date.now();
+		if (this.detailedHealthCache && now - this.detailedHealthCache.timestamp < this.detailedHealthCacheTTL) {
+			return this.detailedHealthCache.response;
+		}
 		const checks: {
 			database: { status: boolean; latency?: number };
 			slackApi: { status: boolean; error?: string };
@@ -909,16 +946,26 @@ class Cache {
 			console.error("Database health check failed:", error);
 		}
 
-		// Check Slack API if wrapper is available
+		// Check Slack API if wrapper is available (with caching to avoid rate limits)
 		if (this.slackWrapper) {
-			try {
-				await this.slackWrapper.testAuth();
-				checks.slackApi = { status: true };
-			} catch (error) {
-				checks.slackApi = {
-					status: false,
-					error: error instanceof Error ? error.message : "Unknown error",
-				};
+			const now = Date.now();
+			// Use cached result if less than 60 seconds old
+			if (this.slackHealthCache && now - this.slackHealthCache.timestamp < this.slackHealthCacheTTL) {
+				checks.slackApi = { status: this.slackHealthCache.status, error: this.slackHealthCache.error };
+			} else {
+				// Cache miss or expired - make actual API call
+				try {
+					await this.slackWrapper.testAuth();
+					this.slackHealthCache = { status: true, timestamp: now };
+					checks.slackApi = { status: true };
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : "Unknown error";
+					this.slackHealthCache = { status: false, error: errorMsg, timestamp: now };
+					checks.slackApi = {
+						status: false,
+						error: errorMsg,
+					};
+				}
 			}
 		} else {
 			checks.slackApi = { status: true }; // No wrapper means not critical
@@ -960,11 +1007,19 @@ class Cache {
 			status = "degraded";
 		}
 
-		return {
+		const response = {
 			status,
 			checks,
 			uptime: process.uptime(),
 		};
+
+		// Cache the response for 5 seconds to handle high load
+		this.detailedHealthCache = {
+			response,
+			timestamp: Date.now(),
+		};
+
+		return response;
 	}
 
 	/**
