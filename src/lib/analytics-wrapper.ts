@@ -13,6 +13,29 @@ export type RouteHandlerWithAnalytics = (
 ) => Promise<Response> | Response;
 
 /**
+ * Add CORS headers to a response
+ */
+function addCorsHeaders(response: Response): Response {
+	const headers = new Headers(response.headers);
+	headers.set("Access-Control-Allow-Origin", "*");
+	headers.set(
+		"Access-Control-Allow-Methods",
+		"GET, POST, PUT, DELETE, OPTIONS",
+	);
+	headers.set(
+		"Access-Control-Allow-Headers",
+		"Content-Type, Authorization, X-Requested-With",
+	);
+	headers.set("Access-Control-Max-Age", "86400");
+
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
+}
+
+/**
  * Creates analytics wrapper with injected cache
  */
 export function createAnalyticsWrapper(cache: SlackCache) {
@@ -22,6 +45,20 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 		handler: RouteHandlerWithAnalytics,
 	) {
 		return async (request: Request): Promise<Response> => {
+			// Handle OPTIONS preflight requests
+			if (request.method === "OPTIONS") {
+				return new Response(null, {
+					status: 204,
+					headers: {
+						"Access-Control-Allow-Origin": "*",
+						"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+						"Access-Control-Allow-Headers":
+							"Content-Type, Authorization, X-Requested-With",
+						"Access-Control-Max-Age": "86400",
+					},
+				});
+			}
+
 			const startTime = Date.now();
 
 			const recordAnalytics: AnalyticsRecorder = (statusCode: number) => {
@@ -47,7 +84,8 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				);
 			};
 
-			return handler(request, recordAnalytics);
+			const response = await handler(request, recordAnalytics);
+			return addCorsHeaders(response);
 		};
 	};
 }
