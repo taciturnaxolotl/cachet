@@ -729,27 +729,41 @@ class Cache {
 	 * @private
 	 */
 	private setupPurgeSchedule() {
+		const cronOptions = { timezone: "Etc/UTC" };
+
 		// Run purge every hour at 45 minutes (only expired items, analytics cleanup)
 		schedule("45 * * * *", async () => {
-			await this.purgeExpiredItems();
-			await this.lazyUserCleanup();
-		});
-
-		// Schedule emoji updates daily on the hour
-		schedule("0 * * * *", async () => {
-			console.log("Scheduled emoji update starting...");
-			if (this.onEmojiExpired) {
-				this.onEmojiExpired();
-				console.log("Scheduled emoji update completed");
+			try {
+				await this.purgeExpiredItems();
+				await this.lazyUserCleanup();
+			} catch (error) {
+				console.error("Error during purge schedule:", error);
 			}
-		});
+		}, cronOptions);
 
-		// Run VACUUM daily at 3am to reclaim disk space
-		schedule("0 3 * * *", () => {
-			console.log("Running scheduled VACUUM...");
-			this.db.run("VACUUM");
-			console.log("VACUUM completed");
-		});
+		// Schedule emoji updates every hour on the hour
+		schedule("0 * * * *", async () => {
+			try {
+				console.log("Scheduled emoji update starting...");
+				if (this.onEmojiExpired) {
+					await this.onEmojiExpired();
+					console.log("Scheduled emoji update completed");
+				}
+			} catch (error) {
+				console.error("Error during emoji update schedule:", error);
+			}
+		}, cronOptions);
+
+		// Run VACUUM daily at 8am UTC (3am EST / 4am EDT)
+		schedule("0 8 * * *", () => {
+			try {
+				console.log("Running scheduled VACUUM...");
+				this.db.run("VACUUM");
+				console.log("VACUUM completed");
+			} catch (error) {
+				console.error("Error during VACUUM:", error);
+			}
+		}, cronOptions);
 	}
 
 	/**
@@ -806,9 +820,9 @@ class Cache {
 	 * @private
 	 */
 	private async lazyUserCleanup(): Promise<void> {
-		const currentHour = new Date().getHours();
-		// Only run during off-peak hours (3-5 AM) and not every time
-		if (currentHour >= 3 && currentHour < 5 && Math.random() < 0.1) {
+		const currentHour = new Date().getUTCHours();
+		// Only run during off-peak hours (8-10 UTC = 3-5 AM EST / 4-6 AM EDT) and not every time
+		if (currentHour >= 8 && currentHour < 10 && Math.random() < 0.1) {
 			// 10% chance
 			const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 			const result = this.db.run("DELETE FROM users WHERE expiration < ?", [

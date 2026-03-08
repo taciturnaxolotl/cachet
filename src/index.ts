@@ -159,4 +159,13 @@ const shutdown = () => {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
+// Prevent unhandled errors from crashing the process
+process.on("unhandledRejection", (reason) => {
+	console.error("Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+	console.error("Uncaught exception:", error);
+});
+
 export { cache, slackApp };
