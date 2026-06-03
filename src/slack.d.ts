@@ -64,6 +64,12 @@ export interface SlackUser {
 	is_app_user: boolean;
 	/** Whether user has two-factor auth enabled */
 	has_2fa: boolean;
+	/** Enterprise user info (present for enterprise grid users) */
+	enterprise_user?: {
+		id: string;
+		enterprise_id: string;
+		enterprise_name: string;
+	};
 }
 
 /**

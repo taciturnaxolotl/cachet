@@ -89,8 +89,9 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 			);
 		}
 
+		const resolvedId = userId.toUpperCase();
 		await cache.insertUser(
-			slackUser.id,
+			resolvedId,
 			slackUser.real_name || slackUser.name || "Unknown",
 			slackUser.profile?.pronouns || "",
 			slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
@@ -98,8 +99,8 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 
 		recordAnalytics(200);
 		return Response.json({
-			id: slackUser.id,
-			userId: slackUser.id,
+			id: resolvedId,
+			userId: resolvedId,
 			displayName: slackUser.real_name || slackUser.name || "Unknown",
 			pronouns: slackUser.profile?.pronouns || "",
 			imageUrl:

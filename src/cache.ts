@@ -1114,7 +1114,7 @@ class Cache {
 
 					// Update user in cache with fresh data
 					await this.insertUser(
-						slackUser.id,
+						userId.toUpperCase(),
 						slackUser.real_name || slackUser.name || "Unknown",
 						slackUser.profile?.pronouns || "",
 						slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
