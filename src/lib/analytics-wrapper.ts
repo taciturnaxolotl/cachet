@@ -59,7 +59,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				});
 			}
 
-			const startTime = Date.now();
+			const startTime = performance.now();
 
 			const recordAnalytics: AnalyticsRecorder = (statusCode: number) => {
 				// Skip analytics entirely for health checks to reduce database load
@@ -84,7 +84,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 					statusCode,
 					userAgent,
 					ipAddress,
-					Date.now() - startTime,
+					Number((performance.now() - startTime).toFixed(3)),
 					referer,
 				);
 			};

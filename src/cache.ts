@@ -1363,7 +1363,7 @@ class Cache {
 	 * @param statusCode HTTP status code
 	 * @param userAgent User agent string
 	 * @param ipAddress IP address of the client (unused, kept for API compatibility)
-	 * @param responseTime Response time in milliseconds
+	 * @param responseTime Response time in milliseconds (sub-ms precision via performance.now())
 	 * @param referer Referer header value
 	 */
 	recordRequest(
