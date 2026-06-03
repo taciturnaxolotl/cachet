@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { schedule } from "node-cron";
+import { schedule, type ScheduledTask } from "node-cron";
 import { bucketAnalyticsMigration } from "./migrations/bucketAnalyticsMigration";
 import { endpointGroupingMigration } from "./migrations/endpointGroupingMigration";
 import { logGroupingMigration } from "./migrations/logGroupingMigration";
@@ -47,6 +47,10 @@ class Cache {
 	// Composed services
 	private analytics: AnalyticsQueryService;
 	private healthMonitor: HealthMonitor;
+
+	// Scheduled task handles for cleanup
+	private cronTasks: ScheduledTask[] = [];
+	private queueIntervalId?: ReturnType<typeof setInterval>;
 
 	// Prepared statements for cache lookups
 	private stmtGetUser!: import("bun:sqlite").Statement;
@@ -204,16 +208,16 @@ class Cache {
 	private setupPurgeSchedule() {
 		const cronOptions = { timezone: "Etc/UTC" };
 
-		schedule("45 * * * *", async () => {
+		this.cronTasks.push(schedule("45 * * * *", async () => {
 			try {
 				await this.purgeExpiredItems();
 				await this.lazyUserCleanup();
 			} catch (error) {
 				console.error("Error during purge schedule:", error);
 			}
-		}, cronOptions);
+		}, cronOptions));
 
-		schedule("0 * * * *", async () => {
+		this.cronTasks.push(schedule("0 * * * *", async () => {
 			try {
 				console.log("Scheduled emoji update starting...");
 				if (this.onEmojiExpired) {
@@ -223,9 +227,9 @@ class Cache {
 			} catch (error) {
 				console.error("Error during emoji update schedule:", error);
 			}
-		}, cronOptions);
+		}, cronOptions));
 
-		schedule("0 8 * * *", () => {
+		this.cronTasks.push(schedule("0 8 * * *", () => {
 			try {
 				console.log("Running scheduled VACUUM...");
 				this.db.run("VACUUM");
@@ -233,7 +237,7 @@ class Cache {
 			} catch (error) {
 				console.error("Error during VACUUM:", error);
 			}
-		}, cronOptions);
+		}, cronOptions));
 	}
 
 	private async runMigrations() {
@@ -350,7 +354,7 @@ class Cache {
 	}
 
 	private startQueueProcessor() {
-		setInterval(async () => {
+		this.queueIntervalId = setInterval(async () => {
 			await this.processUserUpdateQueue();
 		}, 30 * 1000);
 	}
@@ -628,6 +632,24 @@ class Cache {
 
 	async getReferers(): Promise<Array<{ refererHost: string; hits: number }>> {
 		return this.analytics.getReferers();
+	}
+	/**
+	 * Closes all resources: stops cron jobs, clears intervals, closes database.
+	 * Call this during graceful shutdown.
+	 */
+	close() {
+		for (const task of this.cronTasks) {
+			task.stop();
+		}
+		this.cronTasks = [];
+
+		if (this.queueIntervalId) {
+			clearInterval(this.queueIntervalId);
+			this.queueIntervalId = undefined;
+		}
+
+		this.healthMonitor.endUptimeSession();
+		this.db.close();
 	}
 }
 

@@ -157,22 +157,27 @@ const server = serve({
 console.log(`🚀 Server running on http://localhost:${server.port}`);
 
 // Graceful shutdown handling
+let shuttingDown = false;
 const shutdown = () => {
+	if (shuttingDown) return;
+	shuttingDown = true;
 	console.log("Shutting down gracefully...");
-	cache.endUptimeSession();
+	server.stop();
+	cache.close();
+	console.log("Shutdown complete");
 	process.exit(0);
 };
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-// Prevent unhandled errors from crashing the process
 process.on("unhandledRejection", (reason) => {
 	console.error("Unhandled promise rejection:", reason);
 });
 
 process.on("uncaughtException", (error) => {
 	console.error("Uncaught exception:", error);
+	process.exit(1);
 });
 
 export { cache, slackApp };
