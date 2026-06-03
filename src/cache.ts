@@ -686,42 +686,43 @@ class Cache {
 	}
 
 	/**
-	 * Gets lifetime uptime percentage
+	 * Gets uptime percentage over the last 90 days
 	 * @returns Uptime percentage (0-100)
 	 */
-	getLifetimeUptime(): number {
+	getUptime(): number {
 		const now = Date.now();
+		const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
+		const windowStart = now - ninetyDaysMs;
 
-		// Get first session start time
 		const firstSession = this.db
-			.query("SELECT MIN(start_time) as first_start FROM uptime_sessions")
-			.get() as { first_start: number | null };
+			.query(
+				"SELECT MIN(start_time) as first_start FROM uptime_sessions WHERE start_time >= ?",
+			)
+			.get(windowStart) as { first_start: number | null };
 
 		if (!firstSession?.first_start) {
-			return 100; // No sessions yet, assume 100%
+			return 100;
 		}
 
-		const totalLifetime = now - firstSession.first_start;
-		if (totalLifetime <= 0) return 100;
+		const totalWindow = now - firstSession.first_start;
+		if (totalWindow <= 0) return 100;
 
-		// Sum all completed session durations
 		const completedResult = this.db
 			.query(
-				"SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL",
+				"SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL AND start_time >= ?",
 			)
-			.get() as { total: number };
+			.get(windowStart) as { total: number };
 
-		// Add current session duration (still running)
 		const currentSession = this.db
 			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
 			.get(this.currentSessionId) as { start_time: number } | null;
 
 		const currentDuration = currentSession
-			? now - currentSession.start_time
+			? now - Math.max(currentSession.start_time, windowStart)
 			: 0;
 		const totalUptime = completedResult.total + currentDuration;
 
-		return Math.min(100, (totalUptime / totalLifetime) * 100);
+		return Math.min(100, (totalUptime / totalWindow) * 100);
 	}
 
 	/**
@@ -1791,7 +1792,7 @@ class Cache {
 				? (redirectRequests / (redirectRequests + dataRequests)) * 100
 				: 0;
 
-		const uptime = this.getLifetimeUptime();
+		const uptime = this.getUptime();
 
 		// Peak traffic analysis from bucket table
 		const peakHourData = this.db
@@ -1958,7 +1959,7 @@ class Cache {
 				avgResponseResult.totalHits && avgResponseResult.totalHits > 0
 					? (avgResponseResult.totalTime ?? 0) / avgResponseResult.totalHits
 					: null,
-			uptime: this.getLifetimeUptime(),
+			uptime: this.getUptime(),
 		};
 
 		this.typedAnalyticsCache.setEssentialStatsData(cacheKey, result);
