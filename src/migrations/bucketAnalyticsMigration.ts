@@ -4,12 +4,6 @@ import type { Migration } from "./types";
 /**
  * Migration to convert raw request_analytics to bucketed time-series tables.
  * This dramatically reduces storage and improves query performance.
- *
- * New tables:
- * - traffic_10min: 10-minute buckets, pruned after 24h (high resolution)
- * - traffic_hourly: Hourly buckets (medium resolution)
- * - traffic_daily: Daily buckets (long-term storage)
- * - user_agent_stats: Aggregate counts per user agent
  */
 export const bucketAnalyticsMigration: Migration = {
 	version: "0.4.0",
@@ -77,30 +71,21 @@ export const bucketAnalyticsMigration: Migration = {
 			"CREATE INDEX IF NOT EXISTS idx_user_agent_hits ON user_agent_stats(hits DESC)",
 		);
 
-		// Migrate existing data from request_analytics
+		// Check if request_analytics table exists before attempting data migration
+		const tableExists = db
+			.query("SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'")
+			.get() as { name: string } | null;
+
+		if (!tableExists) {
+			console.log("No request_analytics table found, skipping data migration");
+			console.log("Bucket analytics migration completed (schema only)");
+			return;
+		}
+
 		console.log("Migrating existing analytics data to buckets...");
 
-		const existingData = db
-			.query(
-				`
-			SELECT 
-				endpoint,
-				status_code,
-				user_agent,
-				timestamp,
-				response_time
-			FROM request_analytics
-		`,
-			)
-			.all() as Array<{
-			endpoint: string;
-			status_code: number;
-			user_agent: string | null;
-			timestamp: number;
-			response_time: number | null;
-		}>;
-
-		console.log(`Found ${existingData.length} existing records to migrate`);
+		// Compute cutoff once before processing to avoid drift across midnight
+		const oneDayAgoSec = Math.floor(Date.now() / 1000) - 86400;
 
 		// Prepare statements for bulk insert
 		const insert10min = db.prepare(`
@@ -135,10 +120,38 @@ export const bucketAnalyticsMigration: Migration = {
 				last_seen = MAX(last_seen, ?2)
 		`);
 
-		// Process in batches using transactions
+		// Paginate through data using rowid to avoid loading everything into memory
 		const batchSize = 10000;
-		for (let i = 0; i < existingData.length; i += batchSize) {
-			const batch = existingData.slice(i, i + batchSize);
+		let lastRowId = 0;
+		let totalMigrated = 0;
+
+		while (true) {
+			const batch = db
+				.query(
+					`
+				SELECT 
+					rowid,
+					endpoint,
+					status_code,
+					user_agent,
+					timestamp,
+					response_time
+				FROM request_analytics
+				WHERE rowid > ?
+				ORDER BY rowid ASC
+				LIMIT ?
+			`,
+				)
+				.all(lastRowId, batchSize) as Array<{
+				rowid: number;
+				endpoint: string;
+				status_code: number;
+				user_agent: string | null;
+				timestamp: number;
+				response_time: number | null;
+			}>;
+
+			if (batch.length === 0) break;
 
 			db.transaction(() => {
 				for (const row of batch) {
@@ -148,9 +161,7 @@ export const bucketAnalyticsMigration: Migration = {
 					const bucketDay = timestampSec - (timestampSec % 86400);
 					const responseTime = row.response_time || 0;
 
-					// Only insert 10min data for last 24 hours
-					const oneDayAgo = Math.floor(Date.now() / 1000) - 86400;
-					if (bucket10min >= oneDayAgo) {
+					if (bucket10min >= oneDayAgoSec) {
 						insert10min.run(
 							bucket10min,
 							row.endpoint,
@@ -178,16 +189,19 @@ export const bucketAnalyticsMigration: Migration = {
 				}
 			})();
 
-			console.log(
-				`Migrated ${Math.min(i + batchSize, existingData.length)}/${existingData.length} records`,
-			);
+			lastRowId = batch[batch.length - 1].rowid;
+			totalMigrated += batch.length;
+			console.log(`Migrated ${totalMigrated} records...`);
+
+			if (batch.length < batchSize) break;
 		}
+
+		console.log(`Total migrated: ${totalMigrated} records`);
 
 		// Drop old table
 		console.log("Dropping old request_analytics table...");
 		db.run("DROP TABLE IF EXISTS request_analytics");
 
-		// Note: VACUUM cannot run inside a transaction, run manually after migration if needed
 		console.log(
 			"Bucket analytics migration completed (run VACUUM manually to reclaim space)",
 		);

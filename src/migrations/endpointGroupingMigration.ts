@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Migration } from "./types";
+import { normalizeEndpoint } from "./normalizeEndpoint";
 
 /**
  * Migration to fix endpoint grouping in analytics
@@ -12,7 +13,16 @@ export const endpointGroupingMigration: Migration = {
 	async up(db: Database): Promise<void> {
 		console.log("Running endpoint grouping migration...");
 
-		// Get all request_analytics entries with specific URLs
+		// Check if request_analytics table exists (may have been dropped by later migration)
+		const tableExists = db
+			.query("SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'")
+			.get() as { name: string } | null;
+
+		if (!tableExists) {
+			console.log("request_analytics table not found, skipping endpoint grouping migration");
+			return;
+		}
+
 		const results = db
 			.query(`
       SELECT id, endpoint FROM request_analytics 
@@ -20,56 +30,27 @@ export const endpointGroupingMigration: Migration = {
     `)
 			.all() as Array<{ id: string; endpoint: string }>;
 
-		console.log(`Found ${results.length} entries to update`);
+		console.log(`Found ${results.length} entries to check`);
 
-		// Process each entry and update with the correct grouping
+		// Collect updates, then batch apply in a transaction
+		const updates: Array<{ id: string; newEndpoint: string }> = [];
 		for (const entry of results) {
-			let newEndpoint = entry.endpoint;
-
-			// Apply the same grouping logic we use in the analytics
-			if (entry.endpoint.match(/^\/users\/[^/]+$/)) {
-				// Keep as is - these are already correctly grouped
-				continue;
-			} else if (entry.endpoint.match(/^\/users\/[^/]+\/r$/)) {
-				// Keep as is - these are already correctly grouped
-				continue;
-			} else if (entry.endpoint.match(/^\/emojis\/[^/]+$/)) {
-				// Keep as is - these are already correctly grouped
-				continue;
-			} else if (entry.endpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-				// Keep as is - these are already correctly grouped
-				continue;
-			} else if (
-				entry.endpoint.includes("/users/") &&
-				entry.endpoint.includes("/r")
-			) {
-				// This is a user redirect with a non-standard format
-				newEndpoint = "/users/USER_ID/r";
-			} else if (entry.endpoint.includes("/users/")) {
-				// This is a user data endpoint with a non-standard format
-				newEndpoint = "/users/USER_ID";
-			} else if (
-				entry.endpoint.includes("/emojis/") &&
-				entry.endpoint.includes("/r")
-			) {
-				// This is an emoji redirect with a non-standard format
-				newEndpoint = "/emojis/EMOJI_NAME/r";
-			} else if (entry.endpoint.includes("/emojis/")) {
-				// This is an emoji data endpoint with a non-standard format
-				newEndpoint = "/emojis/EMOJI_NAME";
-			}
-
-			// Only update if the endpoint has changed
+			const newEndpoint = normalizeEndpoint(entry.endpoint);
 			if (newEndpoint !== entry.endpoint) {
-				db.run(
-					`
-          UPDATE request_analytics 
-          SET endpoint = ? 
-          WHERE id = ?
-        `,
-					[newEndpoint, entry.id],
-				);
+				updates.push({ id: entry.id, newEndpoint });
 			}
+		}
+
+		if (updates.length > 0) {
+			const stmt = db.prepare("UPDATE request_analytics SET endpoint = ? WHERE id = ?");
+			db.transaction(() => {
+				for (const update of updates) {
+					stmt.run(update.newEndpoint, update.id);
+				}
+			})();
+			console.log(`Updated ${updates.length} endpoints`);
+		} else {
+			console.log("No endpoints needed updating");
 		}
 
 		console.log("Endpoint grouping migration completed");

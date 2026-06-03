@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import type { Migration } from "./types";
+import { normalizeEndpoint } from "./normalizeEndpoint";
 
 /**
  * Migration to group request logs that aren't already grouped
@@ -12,7 +13,16 @@ export const logGroupingMigration: Migration = {
 	async up(db: Database): Promise<void> {
 		console.log("Running log grouping migration...");
 
-		// Get all request_analytics entries with specific URLs that need grouping
+		// Check if request_analytics table exists (may have been dropped by later migration)
+		const tableExists = db
+			.query("SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'")
+			.get() as { name: string } | null;
+
+		if (!tableExists) {
+			console.log("request_analytics table not found, skipping log grouping migration");
+			return;
+		}
+
 		const results = db
 			.query(`
       SELECT id, endpoint FROM request_analytics 
@@ -30,80 +40,27 @@ export const logGroupingMigration: Migration = {
     `)
 			.all() as Array<{ id: string; endpoint: string }>;
 
-		console.log(`Found ${results.length} entries to update`);
+		console.log(`Found ${results.length} entries to check`);
 
-		// Process each entry and update with the correct grouping
+		// Collect updates, then batch apply in a transaction
+		const updates: Array<{ id: string; newEndpoint: string }> = [];
 		for (const entry of results) {
-			let newEndpoint = entry.endpoint;
-
-			// Apply grouping logic
-			if (
-				entry.endpoint.includes("localhost") ||
-				entry.endpoint.includes("http")
-			) {
-				// Extract the path from URLs
-				try {
-					const url = new URL(entry.endpoint);
-					newEndpoint = url.pathname;
-				} catch (_e) {
-					// If URL parsing fails, try to extract the path manually
-					const pathMatch = entry.endpoint.match(/https?:\/\/[^/]+(\/.*)/);
-					if (pathMatch?.[1]) {
-						newEndpoint = pathMatch[1];
-					}
-				}
-			}
-
-			// Now apply the same grouping logic to the extracted path
-			if (newEndpoint.match(/^\/users\/[^/]+$/)) {
-				newEndpoint = "/users/USER_ID";
-			} else if (newEndpoint.match(/^\/users\/[^/]+\/r$/)) {
-				newEndpoint = "/users/USER_ID/r";
-			} else if (newEndpoint.match(/^\/emojis\/[^/]+$/)) {
-				newEndpoint = "/emojis/EMOJI_NAME";
-			} else if (newEndpoint.match(/^\/emojis\/[^/]+\/r$/)) {
-				newEndpoint = "/emojis/EMOJI_NAME/r";
-			} else if (
-				newEndpoint.includes("/users/") &&
-				newEndpoint.includes("/r")
-			) {
-				newEndpoint = "/users/USER_ID/r";
-			} else if (newEndpoint.includes("/users/")) {
-				newEndpoint = "/users/USER_ID";
-			} else if (
-				newEndpoint.includes("/emojis/") &&
-				newEndpoint.includes("/r")
-			) {
-				newEndpoint = "/emojis/EMOJI_NAME/r";
-			} else if (newEndpoint.includes("/emojis/")) {
-				newEndpoint = "/emojis/EMOJI_NAME";
-			} else if (newEndpoint === "/") {
-				newEndpoint = "/";
-			} else if (newEndpoint === "/health") {
-				newEndpoint = "/health";
-			} else if (newEndpoint === "/dashboard") {
-				newEndpoint = "/dashboard";
-			} else if (newEndpoint.startsWith("/swagger")) {
-				newEndpoint = "/swagger";
-			} else if (newEndpoint === "/reset") {
-				newEndpoint = "/reset";
-			} else if (newEndpoint === "/stats") {
-				newEndpoint = "/stats";
-			} else {
-				newEndpoint = "/other";
-			}
-
-			// Only update if the endpoint has changed
+			const newEndpoint = normalizeEndpoint(entry.endpoint);
 			if (newEndpoint !== entry.endpoint) {
-				db.run(
-					`
-          UPDATE request_analytics 
-          SET endpoint = ? 
-          WHERE id = ?
-        `,
-					[newEndpoint, entry.id],
-				);
+				updates.push({ id: entry.id, newEndpoint });
 			}
+		}
+
+		if (updates.length > 0) {
+			const stmt = db.prepare("UPDATE request_analytics SET endpoint = ? WHERE id = ?");
+			db.transaction(() => {
+				for (const update of updates) {
+					stmt.run(update.newEndpoint, update.id);
+				}
+			})();
+			console.log(`Updated ${updates.length} endpoints`);
+		} else {
+			console.log("No endpoints needed updating");
 		}
 
 		console.log("Log grouping migration completed");
