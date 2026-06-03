@@ -145,7 +145,19 @@ export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
 								},
 							},
 						}),
-						apiResponse(404, "User not found"),
+						apiResponse(202, "User not yet cached; background fetch queued. Returns placeholder image.", {
+							type: "object",
+							properties: {
+								id: { type: "string", example: "U062UG485EE" },
+								userId: { type: "string", example: "U062UG485EE" },
+								displayName: { type: "string", example: "Unknown" },
+								pronouns: { type: "string", example: "" },
+								imageUrl: {
+									type: "string",
+									example: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
+								},
+							},
+						}),
 					]),
 				},
 			),

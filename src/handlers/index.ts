@@ -5,7 +5,6 @@
 // These will be injected by the route system
 import type { SlackCache } from "../cache";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
-import type { SlackUser } from "../slack";
 import type { SlackWrapper } from "../slackWrapper";
 
 let cache!: SlackCache;
@@ -72,40 +71,19 @@ export const handleGetUser: RouteHandlerWithAnalytics = async (
 	const userId = url.pathname.split("/").pop() || "";
 	const user = await cache.getUser(userId);
 
-	if (!user || !user.imageUrl) {
-		let slackUser: SlackUser;
-		try {
-			slackUser = await slackApp.getUserInfo(userId);
-		} catch (e) {
-			if (e instanceof Error && e.message === "user_not_found") {
-				recordAnalytics(404);
-				return Response.json({ message: "User not found" }, { status: 404 });
-			}
-
-			recordAnalytics(500);
-			return Response.json(
-				{ message: "Internal server error" },
-				{ status: 500 },
-			);
-		}
-
-		const resolvedId = userId.toUpperCase();
-		await cache.insertUser(
-			resolvedId,
-			slackUser.real_name || slackUser.name || "Unknown",
-			slackUser.profile?.pronouns || "",
-			slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
+	if (!user?.imageUrl) {
+		cache.queueUserUpdate(userId);
+		recordAnalytics(202);
+		return Response.json(
+			{
+				id: userId.toUpperCase(),
+				userId: userId.toUpperCase(),
+				displayName: "Unknown",
+				pronouns: "",
+				imageUrl: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
+			},
+			{ status: 202 },
 		);
-
-		recordAnalytics(200);
-		return Response.json({
-			id: resolvedId,
-			userId: resolvedId,
-			displayName: slackUser.real_name || slackUser.name || "Unknown",
-			pronouns: slackUser.profile?.pronouns || "",
-			imageUrl:
-				slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
-		});
 	}
 
 	recordAnalytics(200);

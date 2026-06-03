@@ -58,7 +58,9 @@ http://cachet.dunkirk.sh {
 
 ### Usage
 
-The api is pretty simple. You can get a profile picture by calling `GET /profile/:id` where `:id` is the slack user id. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`.
+The api is pretty simple. You can get a profile picture by calling `GET /users/:id` where `:id` is the slack user id. You can get a redirect to the profile image directly with `GET /users/:id/r`. You can get an emoji by calling `GET /emoji/:name` where `:name` is the name of the emoji. You can also get a list of all emojis by calling `GET /emojis`.
+
+On cache miss, `GET /users/:id` returns `202 Accepted` with a placeholder image URL and queues a background fetch. Retry after a few seconds to get the real profile data.
 
 Additionally, you can manually purge a specific user's cache with `POST /users/:user/purge` (requires authentication with a bearer token).
 
