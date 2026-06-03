@@ -3,7 +3,7 @@
  */
 
 import type { SlackCache } from "../cache";
-import * as handlers from "../handlers";
+import { createHandlers } from "../handlers";
 import { createAnalyticsWrapper } from "../lib/analytics-wrapper";
 import type { SlackWrapper } from "../slackWrapper";
 import {
@@ -14,9 +14,8 @@ import {
 } from "../types/routes";
 
 // Factory function to create all routes with injected dependencies
-export function createApiRoutes(cache: SlackCache, slackApp: SlackWrapper) {
-	// Inject dependencies into handlers
-	handlers.injectDependencies(cache, slackApp);
+export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
+	const handlers = createHandlers(cache);
 
 	const withAnalytics = createAnalyticsWrapper(cache);
 
