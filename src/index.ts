@@ -1,4 +1,5 @@
 import { serve } from "bun";
+import { config } from "./config";
 import { getEmojiUrl } from "../utils/emojiHelper";
 import { SlackCache } from "./cache";
 import dashboard from "./dashboard.html";
@@ -8,9 +9,15 @@ import { SlackWrapper } from "./slackWrapper";
 import swagger from "./swagger.html";
 
 // Initialize SlackWrapper and Cache
-const slackApp = new SlackWrapper();
+const slackApp = new SlackWrapper({
+	signingSecret: config.slack.signingSecret,
+	botToken: config.slack.botToken,
+	maxConcurrent: config.slack.maxConcurrent,
+	minTimeMs: config.slack.minTimeMs,
+	requestTimeoutMs: config.slack.requestTimeoutMs,
+});
 const cache = new SlackCache(
-	process.env.DATABASE_PATH ?? "./data/cachet.db",
+	config.databasePath,
 	25,
 	async () => {
 		console.log("Fetching emojis from Slack");
@@ -143,8 +150,8 @@ const allRoutes = {
 // Start the server
 const server = serve({
 	routes: allRoutes,
-	port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
-	development: process.env.NODE_ENV === "dev",
+	port: config.port,
+	development: config.development,
 });
 
 console.log(`🚀 Server running on http://localhost:${server.port}`);

@@ -3,6 +3,7 @@
  */
 
 import type { SlackCache } from "../cache";
+import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 
 /**
@@ -113,7 +114,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const configuredToken = process.env.BEARER_TOKEN;
+		const configuredToken = config.bearerToken;
 		if (!configuredToken) {
 			console.error("BEARER_TOKEN is not configured");
 			recordAnalytics(500);
@@ -189,7 +190,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const configuredToken = process.env.BEARER_TOKEN;
+		const configuredToken = config.bearerToken;
 		if (!configuredToken) {
 			console.error("BEARER_TOKEN is not configured");
 			recordAnalytics(500);

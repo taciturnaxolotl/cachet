@@ -14,6 +14,12 @@ interface SlackConfig {
 	signingSecret?: string;
 	/** Slack bot user OAuth token */
 	botToken?: string;
+	/** Max concurrent requests (default: 3) */
+	maxConcurrent?: number;
+	/** Min time between requests in ms (default: 200) */
+	minTimeMs?: number;
+	/** Request timeout in ms (default: 5000) */
+	requestTimeoutMs?: number;
 }
 
 /**
@@ -31,25 +37,18 @@ class SlackWrapper {
 	 * @throws Error if required credentials are missing
 	 */
 	constructor(config?: SlackConfig) {
-		this.signingSecret =
-			config?.signingSecret || process.env.SLACK_SIGNING_SECRET || "";
-		this.botToken =
-			config?.botToken ||
-			process.env.SLACK_BOT_TOKEN ||
-			process.env.SLACK_TOKEN ||
-			"";
+		this.signingSecret = config?.signingSecret || "";
+		this.botToken = config?.botToken || "";
 
-		// Configure rate limiting - defaults are conservative to respect Slack API limits
-		const maxConcurrent = Number(process.env.SLACK_MAX_CONCURRENT ?? 3);
-		const minTime = Number(process.env.SLACK_MIN_TIME_MS ?? 200); // ~5 requests per second
+		const maxConcurrent = config?.maxConcurrent ?? 3;
+		const minTime = config?.minTimeMs ?? 200;
 		this.limiter = new Bottleneck({
 			maxConcurrent:
 				Number.isFinite(maxConcurrent) && maxConcurrent > 0 ? maxConcurrent : 3,
 			minTime: Number.isFinite(minTime) && minTime > 0 ? minTime : 200,
 		});
 
-		// Request timeout in ms (default 5 seconds)
-		const timeout = Number(process.env.SLACK_REQUEST_TIMEOUT_MS ?? 5000);
+		const timeout = config?.requestTimeoutMs ?? 5000;
 		this.requestTimeout =
 			Number.isFinite(timeout) && timeout > 0 ? timeout : 5000;
 
