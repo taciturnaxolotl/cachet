@@ -7,7 +7,6 @@ import type {
 	UserAgentData,
 } from "../types/analytics";
 
-
 const SECONDS_PER_10MIN = 600;
 const SECONDS_PER_HOUR = 3600;
 const SECONDS_PER_DAY = 86400;
@@ -185,7 +184,10 @@ export class AnalyticsQueryService {
 	/**
 	 * Gets request analytics statistics using bucketed time-series data
 	 */
-	async getAnalytics(days: number = 7, getUptime: () => number): Promise<FullAnalyticsData> {
+	async getAnalytics(
+		days: number = 7,
+		getUptime: () => number,
+	): Promise<FullAnalyticsData> {
 		const cacheKey = `analytics_${days}`;
 		const cached = this.typedAnalyticsCache.getAnalyticsData(cacheKey);
 		if (cached) {
@@ -526,7 +528,10 @@ export class AnalyticsQueryService {
 	/**
 	 * Gets essential stats only (fast loading)
 	 */
-	async getEssentialStats(days: number = 7, getUptime: () => number): Promise<EssentialStatsData> {
+	async getEssentialStats(
+		days: number = 7,
+		getUptime: () => number,
+	): Promise<EssentialStatsData> {
 		const cacheKey = `essential_${days}`;
 		const cached = this.typedAnalyticsCache.getEssentialStatsData(cacheKey);
 

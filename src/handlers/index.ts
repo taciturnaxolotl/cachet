@@ -9,7 +9,10 @@ import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 /**
  * Parse a string to a positive integer, returning a fallback if invalid
  */
-export function parsePositiveInt(value: string | null, fallback: number): number {
+export function parsePositiveInt(
+	value: string | null,
+	fallback: number,
+): number {
 	if (!value) return fallback;
 	const n = Number.parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -20,7 +23,10 @@ export function parsePositiveInt(value: string | null, fallback: number): number
  * Eliminates global mutable state and injectDependencies pattern.
  */
 export function createHandlers(cache: SlackCache) {
-	function requireAuth(request: Request, recordAnalytics: (code: number) => void): Response | null {
+	function requireAuth(
+		request: Request,
+		recordAnalytics: (code: number) => void,
+	): Response | null {
 		const token = config.bearerToken;
 		if (!token) {
 			console.error("BEARER_TOKEN is not configured");

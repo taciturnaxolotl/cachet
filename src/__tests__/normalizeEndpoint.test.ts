@@ -21,7 +21,9 @@ describe("normalizeEndpoint", () => {
 	});
 
 	it("normalizes emoji redirect endpoints", () => {
-		expect(normalizeEndpoint("/emojis/hackshark/r")).toBe("/emojis/EMOJI_NAME/r");
+		expect(normalizeEndpoint("/emojis/hackshark/r")).toBe(
+			"/emojis/EMOJI_NAME/r",
+		);
 	});
 
 	it("normalizes static routes", () => {
@@ -42,14 +44,24 @@ describe("normalizeEndpoint", () => {
 	});
 
 	it("extracts path from full URLs", () => {
-		expect(normalizeEndpoint("http://localhost:3000/users/U123")).toBe("/users/USER_ID");
-		expect(normalizeEndpoint("https://example.com/emojis/test/r")).toBe("/emojis/EMOJI_NAME/r");
+		expect(normalizeEndpoint("http://localhost:3000/users/U123")).toBe(
+			"/users/USER_ID",
+		);
+		expect(normalizeEndpoint("https://example.com/emojis/test/r")).toBe(
+			"/emojis/EMOJI_NAME/r",
+		);
 	});
 
 	it("handles non-standard user/emoji formats via includes fallback", () => {
-		expect(normalizeEndpoint("/api/users/something/r")).toBe("/users/USER_ID/r");
+		expect(normalizeEndpoint("/api/users/something/r")).toBe(
+			"/users/USER_ID/r",
+		);
 		expect(normalizeEndpoint("/api/users/something")).toBe("/users/USER_ID");
-		expect(normalizeEndpoint("/api/emojis/something/r")).toBe("/emojis/EMOJI_NAME/r");
-		expect(normalizeEndpoint("/api/emojis/something")).toBe("/emojis/EMOJI_NAME");
+		expect(normalizeEndpoint("/api/emojis/something/r")).toBe(
+			"/emojis/EMOJI_NAME/r",
+		);
+		expect(normalizeEndpoint("/api/emojis/something")).toBe(
+			"/emojis/EMOJI_NAME",
+		);
 	});
 });

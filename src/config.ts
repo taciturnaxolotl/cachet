@@ -17,7 +17,10 @@ export interface AppConfig {
 	};
 }
 
-export function parsePositiveInt(value: string | undefined, fallback: number): number {
+export function parsePositiveInt(
+	value: string | undefined,
+	fallback: number,
+): number {
 	if (!value) return fallback;
 	const n = Number.parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -41,14 +44,18 @@ function loadConfig(): AppConfig {
 	if (portRaw) {
 		port = Number.parseInt(portRaw, 10);
 		if (!Number.isFinite(port) || port <= 0 || port > 65535) {
-			errors.push(`PORT must be a valid port number (1-65535), got "${portRaw}"`);
+			errors.push(
+				`PORT must be a valid port number (1-65535), got "${portRaw}"`,
+			);
 			port = 3000;
 		}
 	}
 
 	const bearerToken = process.env.BEARER_TOKEN || null;
 	if (!bearerToken) {
-		console.warn("BEARER_TOKEN is not set. Admin endpoints (/reset, /users/:id/purge) will return 500.");
+		console.warn(
+			"BEARER_TOKEN is not set. Admin endpoints (/reset, /users/:id/purge) will return 500.",
+		);
 	}
 
 	if (errors.length > 0) {
@@ -65,7 +72,10 @@ function loadConfig(): AppConfig {
 			botToken,
 			maxConcurrent: parsePositiveInt(process.env.SLACK_MAX_CONCURRENT, 3),
 			minTimeMs: parsePositiveInt(process.env.SLACK_MIN_TIME_MS, 200),
-			requestTimeoutMs: parsePositiveInt(process.env.SLACK_REQUEST_TIMEOUT_MS, 5000),
+			requestTimeoutMs: parsePositiveInt(
+				process.env.SLACK_REQUEST_TIMEOUT_MS,
+				5000,
+			),
 		},
 	};
 

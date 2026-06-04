@@ -9,13 +9,17 @@ describe("SlackCache integration", () => {
 	let cache: SlackCache;
 
 	beforeAll(() => {
-		try { unlinkSync(TEST_DB_PATH); } catch {}
+		try {
+			unlinkSync(TEST_DB_PATH);
+		} catch {}
 		cache = new SlackCache(TEST_DB_PATH, 24);
 	});
 
 	afterAll(() => {
 		cache.close();
-		try { unlinkSync(TEST_DB_PATH); } catch {}
+		try {
+			unlinkSync(TEST_DB_PATH);
+		} catch {}
 	});
 
 	describe("user CRUD", () => {
@@ -38,7 +42,12 @@ describe("SlackCache integration", () => {
 		});
 
 		it("normalizes userId to uppercase", async () => {
-			await cache.insertUser("u456", "Lower", "", "https://example.com/lower.png");
+			await cache.insertUser(
+				"u456",
+				"Lower",
+				"",
+				"https://example.com/lower.png",
+			);
 			const user = await cache.getUser("u456");
 			expect(user).not.toBeNull();
 			expect(user!.userId).toBe("U456");
@@ -46,7 +55,12 @@ describe("SlackCache integration", () => {
 
 		it("updates imageUrl on conflict (displayName/pronouns preserved from first insert)", async () => {
 			await cache.insertUser("U789", "Old Name", "", "https://old.com/img.png");
-			await cache.insertUser("U789", "New Name", "she/her", "https://new.com/img.png");
+			await cache.insertUser(
+				"U789",
+				"New Name",
+				"she/her",
+				"https://new.com/img.png",
+			);
 
 			const user = await cache.getUser("U789");
 			// ON CONFLICT only updates imageUrl and expiration, not displayName/pronouns
@@ -60,7 +74,12 @@ describe("SlackCache integration", () => {
 		});
 
 		it("purges a specific user", async () => {
-			await cache.insertUser("UPURGE", "Purge Me", "", "https://example.com/p.png");
+			await cache.insertUser(
+				"UPURGE",
+				"Purge Me",
+				"",
+				"https://example.com/p.png",
+			);
 			const purged = await cache.purgeUserCache("UPURGE");
 			expect(purged).toBe(true);
 
@@ -71,7 +90,11 @@ describe("SlackCache integration", () => {
 
 	describe("emoji CRUD", () => {
 		it("inserts and retrieves an emoji", async () => {
-			const ok = await cache.insertEmoji("hackshark", null, "https://emoji.com/hackshark.png");
+			const ok = await cache.insertEmoji(
+				"hackshark",
+				null,
+				"https://emoji.com/hackshark.png",
+			);
 			expect(ok).toBe(true);
 
 			const emoji = await cache.getEmoji("hackshark");
@@ -89,7 +112,11 @@ describe("SlackCache integration", () => {
 		});
 
 		it("handles emoji aliases", async () => {
-			await cache.insertEmoji("alias_emoji", "original", "https://emoji.com/alias.png");
+			await cache.insertEmoji(
+				"alias_emoji",
+				"original",
+				"https://emoji.com/alias.png",
+			);
 			const emoji = await cache.getEmoji("alias_emoji");
 			expect(emoji!.alias).toBe("original");
 		});
@@ -104,7 +131,9 @@ describe("SlackCache integration", () => {
 			expect(ok).toBe(true);
 
 			const all = await cache.getAllEmojis();
-			const batchNames = all.filter(e => e.name.startsWith("batch")).map(e => e.name);
+			const batchNames = all
+				.filter((e) => e.name.startsWith("batch"))
+				.map((e) => e.name);
 			expect(batchNames).toContain("batch1");
 			expect(batchNames).toContain("batch2");
 			expect(batchNames).toContain("batch3");
@@ -158,7 +187,13 @@ describe("SlackCache integration", () => {
 	describe("analytics recording", () => {
 		it("records requests without throwing", () => {
 			expect(() => {
-				cache.recordRequest("/test", 200, "TestAgent/1.0", 15.5, "https://example.com");
+				cache.recordRequest(
+					"/test",
+					200,
+					"TestAgent/1.0",
+					15.5,
+					"https://example.com",
+				);
 			}).not.toThrow();
 		});
 
@@ -185,7 +220,13 @@ describe("SlackCache integration", () => {
 		});
 
 		it("retrieves referers", async () => {
-			cache.recordRequest("/ref-test", 200, "Agent", 1.0, "https://referrer.example.com/page");
+			cache.recordRequest(
+				"/ref-test",
+				200,
+				"Agent",
+				1.0,
+				"https://referrer.example.com/page",
+			);
 			const referers = await cache.getReferers();
 			expect(Array.isArray(referers)).toBe(true);
 		});

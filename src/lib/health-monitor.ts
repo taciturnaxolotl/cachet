@@ -11,7 +11,11 @@ export class HealthMonitor {
 	private userUpdateQueueSize: () => number;
 
 	// Cached Slack API health check result (60 second TTL)
-	private slackHealthCache: { status: boolean; error?: string; timestamp: number } | null = null;
+	private slackHealthCache: {
+		status: boolean;
+		error?: string;
+		timestamp: number;
+	} | null = null;
 	private slackHealthCacheTTL = 60000;
 
 	// Cached detailed health check response (5 second TTL for high-load scenarios)
@@ -21,10 +25,7 @@ export class HealthMonitor {
 	} | null = null;
 	private detailedHealthCacheTTL = 5000;
 
-	constructor(
-		db: Database,
-		userUpdateQueueSize: () => number,
-	) {
+	constructor(db: Database, userUpdateQueueSize: () => number) {
 		this.db = db;
 		this.userUpdateQueueSize = userUpdateQueueSize;
 	}
@@ -147,7 +148,10 @@ export class HealthMonitor {
 	 */
 	async detailedHealthCheck(): Promise<DetailedHealthResponse> {
 		const now = Date.now();
-		if (this.detailedHealthCache && now - this.detailedHealthCache.timestamp < this.detailedHealthCacheTTL) {
+		if (
+			this.detailedHealthCache &&
+			now - this.detailedHealthCache.timestamp < this.detailedHealthCacheTTL
+		) {
 			return this.detailedHealthCache.response;
 		}
 		const checks: DetailedHealthResponse["checks"] = {
@@ -171,16 +175,27 @@ export class HealthMonitor {
 
 		if (this.slackWrapper) {
 			const now = Date.now();
-			if (this.slackHealthCache && now - this.slackHealthCache.timestamp < this.slackHealthCacheTTL) {
-				checks.slackApi = { status: this.slackHealthCache.status, error: this.slackHealthCache.error };
+			if (
+				this.slackHealthCache &&
+				now - this.slackHealthCache.timestamp < this.slackHealthCacheTTL
+			) {
+				checks.slackApi = {
+					status: this.slackHealthCache.status,
+					error: this.slackHealthCache.error,
+				};
 			} else {
 				try {
 					await this.slackWrapper.testAuth();
 					this.slackHealthCache = { status: true, timestamp: now };
 					checks.slackApi = { status: true };
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : "Unknown error";
-					this.slackHealthCache = { status: false, error: errorMsg, timestamp: now };
+					const errorMsg =
+						error instanceof Error ? error.message : "Unknown error";
+					this.slackHealthCache = {
+						status: false,
+						error: errorMsg,
+						timestamp: now,
+					};
 					checks.slackApi = {
 						status: false,
 						error: errorMsg,

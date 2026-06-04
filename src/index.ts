@@ -19,47 +19,43 @@ const slackApp = new SlackWrapper({
 	minTimeMs: config.slack.minTimeMs,
 	requestTimeoutMs: config.slack.requestTimeoutMs,
 });
-const cache = new SlackCache(
-	config.databasePath,
-	25,
-	async () => {
-		console.log("Fetching emojis from Slack");
-		const emojis = await slackApp.getEmojiList();
-		const emojiEntries = Object.entries(emojis)
-			.map(([name, url]) => {
-				if (typeof url === "string" && url.startsWith("alias:")) {
-					const aliasName = url.substring(6);
-					const aliasUrl = emojis[aliasName] ?? getEmojiUrl(aliasName);
+const cache = new SlackCache(config.databasePath, 25, async () => {
+	console.log("Fetching emojis from Slack");
+	const emojis = await slackApp.getEmojiList();
+	const emojiEntries = Object.entries(emojis)
+		.map(([name, url]) => {
+			if (typeof url === "string" && url.startsWith("alias:")) {
+				const aliasName = url.substring(6);
+				const aliasUrl = emojis[aliasName] ?? getEmojiUrl(aliasName);
 
-					if (!aliasUrl) {
-						console.warn(`Could not find alias for ${aliasName}`);
-						return null;
-					}
-
-					return {
-						name,
-						imageUrl: aliasUrl,
-						alias: aliasName,
-					};
+				if (!aliasUrl) {
+					console.warn(`Could not find alias for ${aliasName}`);
+					return null;
 				}
+
 				return {
 					name,
-					imageUrl: url,
-					alias: null,
+					imageUrl: aliasUrl,
+					alias: aliasName,
 				};
-			})
-			.filter(
-				(
-					entry,
-				): entry is { name: string; imageUrl: string; alias: string | null } =>
-					entry !== null,
-			);
+			}
+			return {
+				name,
+				imageUrl: url,
+				alias: null,
+			};
+		})
+		.filter(
+			(
+				entry,
+			): entry is { name: string; imageUrl: string; alias: string | null } =>
+				entry !== null,
+		);
 
-		console.log("Batch inserting emojis");
-		await cache.batchInsertEmojis(emojiEntries);
-		console.log("Finished batch inserting emojis");
-	},
-);
+	console.log("Batch inserting emojis");
+	await cache.batchInsertEmojis(emojiEntries);
+	console.log("Finished batch inserting emojis");
+});
 
 // Inject SlackWrapper into cache for background user updates
 cache.setSlackWrapper(slackApp);
@@ -71,9 +67,17 @@ const apiRoutes = createApiRoutes(cache, slackApp);
 swaggerGenerator.addRoutes(apiRoutes as Record<string, RouteDefinition>);
 const generatedSwagger = swaggerGenerator.getSpec();
 
-const typedRoutes: Record<string, Record<string, (request: Request) => Promise<Response> | Response>> = {};
-for (const [path, routeConfig] of Object.entries(apiRoutes as Record<string, RouteDefinition>)) {
-	const bunRoute: Record<string, (request: Request) => Promise<Response> | Response> = {};
+const typedRoutes: Record<
+	string,
+	Record<string, (request: Request) => Promise<Response> | Response>
+> = {};
+for (const [path, routeConfig] of Object.entries(
+	apiRoutes as Record<string, RouteDefinition>,
+)) {
+	const bunRoute: Record<
+		string,
+		(request: Request) => Promise<Response> | Response
+	> = {};
 	for (const [method, typedRoute] of Object.entries(routeConfig)) {
 		if (typedRoute && "handler" in typedRoute) {
 			bunRoute[method] = typedRoute.handler;
@@ -81,8 +85,6 @@ for (const [path, routeConfig] of Object.entries(apiRoutes as Record<string, Rou
 	}
 	typedRoutes[path] = bunRoute;
 }
-
-
 
 // Legacy routes (non-API)
 const legacyRoutes = {

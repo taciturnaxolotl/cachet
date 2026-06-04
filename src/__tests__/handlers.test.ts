@@ -11,7 +11,11 @@ function createMockCache(overrides: Partial<SlackCache> = {}): SlackCache {
 		insertEmoji: mock(async () => true),
 		batchInsertEmojis: mock(async () => true),
 		purgeUserCache: mock(async () => true),
-		purgeAll: mock(async () => ({ message: "Cache purged", users: 0, emojis: 0 })),
+		purgeAll: mock(async () => ({
+			message: "Cache purged",
+			users: 0,
+			emojis: 0,
+		})),
 		queueUserUpdate: mock(() => {}),
 		healthCheck: mock(async () => true),
 		detailedHealthCheck: mock(async () => ({
@@ -24,8 +28,15 @@ function createMockCache(overrides: Partial<SlackCache> = {}): SlackCache {
 			},
 			uptime: 1234,
 		})),
-		getEssentialStats: mock(async () => ({ totalRequests: 100, averageResponseTime: 25, uptime: 99.9 })),
-		getChartData: mock(async () => ({ requestsByDay: [], latencyOverTime: [] })),
+		getEssentialStats: mock(async () => ({
+			totalRequests: 100,
+			averageResponseTime: 25,
+			uptime: 99.9,
+		})),
+		getChartData: mock(async () => ({
+			requestsByDay: [],
+			latencyOverTime: [],
+		})),
 		getUserAgents: mock(async () => []),
 		getUserAgentCount: mock(async () => 0),
 		getReferers: mock(async () => []),
@@ -160,7 +171,9 @@ describe("handlers", () => {
 			// Instead, test through the handler directly with a mock that has no token
 			const cache = createMockCache();
 			const handlers = createHandlers(cache);
-			const request = new Request("http://localhost/users/U123/purge", { method: "POST" });
+			const request = new Request("http://localhost/users/U123/purge", {
+				method: "POST",
+			});
 			const response = await handlers.handlePurgeUser(request, noopAnalytics);
 
 			// This will depend on whether BEARER_TOKEN is set in the test env
@@ -175,8 +188,13 @@ describe("handlers", () => {
 		it("handleGetEssentialStats returns stats", async () => {
 			const cache = createMockCache();
 			const handlers = createHandlers(cache);
-			const request = new Request("http://localhost/api/stats/essential?days=7");
-			const response = await handlers.handleGetEssentialStats(request, noopAnalytics);
+			const request = new Request(
+				"http://localhost/api/stats/essential?days=7",
+			);
+			const response = await handlers.handleGetEssentialStats(
+				request,
+				noopAnalytics,
+			);
 			const body = await response.json();
 
 			expect(response.status).toBe(200);
@@ -187,7 +205,10 @@ describe("handlers", () => {
 			const cache = createMockCache();
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/api/stats/charts");
-			const response = await handlers.handleGetChartData(request, noopAnalytics);
+			const response = await handlers.handleGetChartData(
+				request,
+				noopAnalytics,
+			);
 
 			expect(response.status).toBe(200);
 		});
@@ -196,7 +217,10 @@ describe("handlers", () => {
 			const cache = createMockCache();
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/api/stats/useragents");
-			const response = await handlers.handleGetUserAgents(request, noopAnalytics);
+			const response = await handlers.handleGetUserAgents(
+				request,
+				noopAnalytics,
+			);
 			const body = await response.json();
 
 			expect(response.status).toBe(200);

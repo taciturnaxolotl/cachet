@@ -15,11 +15,15 @@ export const endpointGroupingMigration: Migration = {
 
 		// Check if request_analytics table exists (may have been dropped by later migration)
 		const tableExists = db
-			.query("SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'")
+			.query(
+				"SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'",
+			)
 			.get() as { name: string } | null;
 
 		if (!tableExists) {
-			console.log("request_analytics table not found, skipping endpoint grouping migration");
+			console.log(
+				"request_analytics table not found, skipping endpoint grouping migration",
+			);
 			return;
 		}
 
@@ -42,7 +46,9 @@ export const endpointGroupingMigration: Migration = {
 		}
 
 		if (updates.length > 0) {
-			const stmt = db.prepare("UPDATE request_analytics SET endpoint = ? WHERE id = ?");
+			const stmt = db.prepare(
+				"UPDATE request_analytics SET endpoint = ? WHERE id = ?",
+			);
 			db.transaction(() => {
 				for (const update of updates) {
 					stmt.run(update.newEndpoint, update.id);

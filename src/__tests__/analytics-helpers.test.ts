@@ -3,18 +3,36 @@ import { selectBucketTable, groupEndpoint } from "../lib/analytics-queries";
 
 describe("selectBucketTable", () => {
 	it("returns 10min table for <= 1 day", () => {
-		expect(selectBucketTable(1)).toEqual({ table: "traffic_10min", bucketSize: 600 });
-		expect(selectBucketTable(0.5)).toEqual({ table: "traffic_10min", bucketSize: 600 });
+		expect(selectBucketTable(1)).toEqual({
+			table: "traffic_10min",
+			bucketSize: 600,
+		});
+		expect(selectBucketTable(0.5)).toEqual({
+			table: "traffic_10min",
+			bucketSize: 600,
+		});
 	});
 
 	it("returns hourly table for 2-30 days", () => {
-		expect(selectBucketTable(7)).toEqual({ table: "traffic_hourly", bucketSize: 3600 });
-		expect(selectBucketTable(30)).toEqual({ table: "traffic_hourly", bucketSize: 3600 });
+		expect(selectBucketTable(7)).toEqual({
+			table: "traffic_hourly",
+			bucketSize: 3600,
+		});
+		expect(selectBucketTable(30)).toEqual({
+			table: "traffic_hourly",
+			bucketSize: 3600,
+		});
 	});
 
 	it("returns daily table for > 30 days", () => {
-		expect(selectBucketTable(31)).toEqual({ table: "traffic_daily", bucketSize: 86400 });
-		expect(selectBucketTable(90)).toEqual({ table: "traffic_daily", bucketSize: 86400 });
+		expect(selectBucketTable(31)).toEqual({
+			table: "traffic_daily",
+			bucketSize: 86400,
+		});
+		expect(selectBucketTable(90)).toEqual({
+			table: "traffic_daily",
+			bucketSize: 86400,
+		});
 	});
 });
 

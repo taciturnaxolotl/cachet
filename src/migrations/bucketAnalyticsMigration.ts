@@ -73,7 +73,9 @@ export const bucketAnalyticsMigration: Migration = {
 
 		// Check if request_analytics table exists before attempting data migration
 		const tableExists = db
-			.query("SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'")
+			.query(
+				"SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'",
+			)
 			.get() as { name: string } | null;
 
 		if (!tableExists) {

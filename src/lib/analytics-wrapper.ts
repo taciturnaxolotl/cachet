@@ -13,8 +13,6 @@ export type RouteHandlerWithAnalytics = (
 	recordAnalytics: AnalyticsRecorder,
 ) => Promise<Response> | Response;
 
-
-
 /**
  * Creates analytics wrapper with injected cache
  */
@@ -62,4 +60,3 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 		};
 	};
 }
-

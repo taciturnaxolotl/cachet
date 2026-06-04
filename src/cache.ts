@@ -5,7 +5,11 @@ import { endpointGroupingMigration } from "./migrations/endpointGroupingMigratio
 import { logGroupingMigration } from "./migrations/logGroupingMigration";
 import { MigrationManager } from "./migrations/migrationManager";
 import type { SlackUserProvider, User, Emoji } from "./types/cache-entities";
-import type { FullAnalyticsData, EssentialStatsData, ChartData } from "./types/analytics";
+import type {
+	FullAnalyticsData,
+	EssentialStatsData,
+	ChartData,
+} from "./types/analytics";
 import { AnalyticsQueryService } from "./lib/analytics-queries";
 import { HealthMonitor } from "./lib/health-monitor";
 
@@ -29,7 +33,6 @@ export type {
 	DashboardMetrics,
 	TrafficOverview,
 } from "./types/analytics";
-
 
 const SECONDS_PER_10MIN = 600;
 const SECONDS_PER_DAY = 86400;
@@ -212,42 +215,59 @@ class Cache {
 				this.onEmojiExpired();
 			}
 		}
-
 	}
 
 	private setupPurgeSchedule() {
 		const cronOptions = { timezone: "Etc/UTC" };
 
-		this.cronTasks.push(schedule("45 * * * *", async () => {
-			try {
-				await this.purgeExpiredItems();
-				await this.lazyUserCleanup();
-			} catch (error) {
-				console.error("Error during purge schedule:", error);
-			}
-		}, cronOptions));
+		this.cronTasks.push(
+			schedule(
+				"45 * * * *",
+				async () => {
+					try {
+						await this.purgeExpiredItems();
+						await this.lazyUserCleanup();
+					} catch (error) {
+						console.error("Error during purge schedule:", error);
+					}
+				},
+				cronOptions,
+			),
+		);
 
-		this.cronTasks.push(schedule("0 * * * *", async () => {
-			try {
-				console.log("Scheduled emoji update starting...");
-				if (this.onEmojiExpired) {
-					await this.onEmojiExpired();
-					console.log("Scheduled emoji update completed");
-				}
-			} catch (error) {
-				console.error("Error during emoji update schedule:", error);
-			}
-		}, cronOptions));
+		this.cronTasks.push(
+			schedule(
+				"0 * * * *",
+				async () => {
+					try {
+						console.log("Scheduled emoji update starting...");
+						if (this.onEmojiExpired) {
+							await this.onEmojiExpired();
+							console.log("Scheduled emoji update completed");
+						}
+					} catch (error) {
+						console.error("Error during emoji update schedule:", error);
+					}
+				},
+				cronOptions,
+			),
+		);
 
-		this.cronTasks.push(schedule("0 8 * * *", () => {
-			try {
-				console.log("Running scheduled VACUUM...");
-				this.db.run("VACUUM");
-				console.log("VACUUM completed");
-			} catch (error) {
-				console.error("Error during VACUUM:", error);
-			}
-		}, cronOptions));
+		this.cronTasks.push(
+			schedule(
+				"0 8 * * *",
+				() => {
+					try {
+						console.log("Running scheduled VACUUM...");
+						this.db.run("VACUUM");
+						console.log("VACUUM completed");
+					} catch (error) {
+						console.error("Error during VACUUM:", error);
+					}
+				},
+				cronOptions,
+			),
+		);
 	}
 
 	private async runMigrations() {
@@ -394,7 +414,10 @@ class Cache {
 		this.isProcessingQueue = true;
 
 		try {
-			const usersToUpdate = Array.from(this.userUpdateQueue).slice(0, QUEUE_BATCH_SIZE);
+			const usersToUpdate = Array.from(this.userUpdateQueue).slice(
+				0,
+				QUEUE_BATCH_SIZE,
+			);
 
 			for (const userId of usersToUpdate) {
 				try {
@@ -609,7 +632,13 @@ class Cache {
 		responseTime?: number,
 		referer?: string,
 	): void {
-		this.analytics.recordRequest(endpoint, statusCode, userAgent, responseTime, referer);
+		this.analytics.recordRequest(
+			endpoint,
+			statusCode,
+			userAgent,
+			responseTime,
+			referer,
+		);
 	}
 
 	async getAnalytics(days: number = 7): Promise<FullAnalyticsData> {
