@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { Database } from "bun:sqlite";
 import { SlackCache } from "../cache";
 import { unlinkSync } from "node:fs";
 
@@ -34,11 +33,11 @@ describe("SlackCache integration", () => {
 
 			const user = await cache.getUser("U123");
 			expect(user).not.toBeNull();
-			expect(user!.userId).toBe("U123");
-			expect(user!.displayName).toBe("Test User");
-			expect(user!.pronouns).toBe("he/him");
-			expect(user!.imageUrl).toBe("https://example.com/avatar.png");
-			expect(user!.type).toBe("user");
+			expect(user?.userId).toBe("U123");
+			expect(user?.displayName).toBe("Test User");
+			expect(user?.pronouns).toBe("he/him");
+			expect(user?.imageUrl).toBe("https://example.com/avatar.png");
+			expect(user?.type).toBe("user");
 		});
 
 		it("normalizes userId to uppercase", async () => {
@@ -50,7 +49,7 @@ describe("SlackCache integration", () => {
 			);
 			const user = await cache.getUser("u456");
 			expect(user).not.toBeNull();
-			expect(user!.userId).toBe("U456");
+			expect(user?.userId).toBe("U456");
 		});
 
 		it("updates imageUrl on conflict (displayName/pronouns preserved from first insert)", async () => {
@@ -64,8 +63,8 @@ describe("SlackCache integration", () => {
 
 			const user = await cache.getUser("U789");
 			// ON CONFLICT only updates imageUrl and expiration, not displayName/pronouns
-			expect(user!.displayName).toBe("Old Name");
-			expect(user!.imageUrl).toBe("https://new.com/img.png");
+			expect(user?.displayName).toBe("Old Name");
+			expect(user?.imageUrl).toBe("https://new.com/img.png");
 		});
 
 		it("returns null for non-existent user", async () => {
@@ -99,16 +98,16 @@ describe("SlackCache integration", () => {
 
 			const emoji = await cache.getEmoji("hackshark");
 			expect(emoji).not.toBeNull();
-			expect(emoji!.name).toBe("hackshark");
-			expect(emoji!.alias).toBeNull();
-			expect(emoji!.type).toBe("emoji");
+			expect(emoji?.name).toBe("hackshark");
+			expect(emoji?.alias).toBeNull();
+			expect(emoji?.type).toBe("emoji");
 		});
 
 		it("normalizes emoji name to lowercase", async () => {
 			await cache.insertEmoji("UpperCase", null, "https://emoji.com/upper.png");
 			const emoji = await cache.getEmoji("UPPERCASE");
 			expect(emoji).not.toBeNull();
-			expect(emoji!.name).toBe("uppercase");
+			expect(emoji?.name).toBe("uppercase");
 		});
 
 		it("handles emoji aliases", async () => {
@@ -118,7 +117,7 @@ describe("SlackCache integration", () => {
 				"https://emoji.com/alias.png",
 			);
 			const emoji = await cache.getEmoji("alias_emoji");
-			expect(emoji!.alias).toBe("original");
+			expect(emoji?.alias).toBe("original");
 		});
 
 		it("batch inserts emojis", async () => {

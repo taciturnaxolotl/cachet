@@ -19,7 +19,7 @@ export type RouteHandlerWithAnalytics = (
 export function createAnalyticsWrapper(cache: SlackCache) {
 	return function withAnalytics(
 		path: string,
-		method: string,
+		_method: string,
 		handler: RouteHandlerWithAnalytics,
 	) {
 		return async (request: Request): Promise<Response> => {
@@ -36,7 +36,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				}
 
 				const userAgent = request.headers.get("user-agent") || "";
-				const ipAddress =
+				const _ipAddress =
 					request.headers.get("x-forwarded-for") ||
 					request.headers.get("x-real-ip") ||
 					"unknown";

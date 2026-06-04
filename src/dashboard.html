@@ -330,12 +330,12 @@
     }
 
     .u-legend {
-      display: none !important;
+      display: none;
     }
 
     .u-select {
-      background: rgba(35, 134, 54, 0.2) !important;
-      border: 1px solid rgba(35, 134, 54, 0.5) !important;
+      background: rgba(35, 134, 54, 0.2);
+      border: 1px solid rgba(35, 134, 54, 0.5);
     }
 
     @media (max-width: 768px) {
@@ -365,11 +365,11 @@
       </div>
     </div>
     <div class="header-right" role="group" aria-label="Time range selector">
-      <button class="time-btn" data-days="1">24h</button>
-      <button class="time-btn active" data-days="7">7d</button>
-      <button class="time-btn" data-days="30">30d</button>
-      <button class="time-btn" data-days="90">90d</button>
-      <button class="time-btn" data-days="365">1y</button>
+      <button type="button" class="time-btn" data-days="1">24h</button>
+      <button type="button" class="time-btn active" data-days="7">7d</button>
+      <button type="button" class="time-btn" data-days="30">30d</button>
+      <button type="button" class="time-btn" data-days="90">90d</button>
+      <button type="button" class="time-btn" data-days="365">1y</button>
     </div>
   </div>
 
@@ -427,16 +427,16 @@
     let currentZoom = null; // { start, end } when zoomed
     let chart = null;
     let dblClickHandler = null;
-    let currentTrafficData = [];
+    let _currentTrafficData = [];
     let allUserAgents = [];
     let abortController = null;
 
     // URL state management
     function getStateFromURL() {
       const params = new URLSearchParams(window.location.search);
-      const days = parseInt(params.get('days'));
-      const start = parseInt(params.get('start'));
-      const end = parseInt(params.get('end'));
+      const days = parseInt(params.get('days'), 10);
+      const start = parseInt(params.get('start'), 10);
+      const end = parseInt(params.get('end'), 10);
       
       return {
         days: days && [1, 7, 30, 90, 365].includes(days) ? days : 7,
@@ -471,7 +471,7 @@
       return `${(ms / 1000).toFixed(2)}s`;
     }
 
-    function formatUptime(seconds) {
+    function _formatUptime(seconds) {
       if (seconds === null || seconds === undefined) return '-';
       const days = Math.floor(seconds / 86400);
       const hours = Math.floor((seconds % 86400) / 3600);
@@ -520,7 +520,7 @@
       if (browser !== 'Other' && os !== 'Other') return `${browser} (${os})`;
       if (browser !== 'Other') return browser;
       if (!ua) return 'Unknown';
-      return ua.length > 60 ? ua.substring(0, 57) + '...' : ua;
+      return ua.length > 60 ? `${ua.substring(0, 57)}...` : ua;
     }
 
     function computeUASummary(agents) {
@@ -591,7 +591,7 @@
         scales: {
           x: {
             time: true,
-            range: (u, dataMin, dataMax) => {
+            range: (_u, dataMin, dataMax) => {
               let min = dataMin;
               let max = dataMax;
               const span = max - min;
@@ -603,8 +603,8 @@
               return [min, max];
             }
           },
-          y: { auto: true, range: (u, min, max) => [0, max * 1.1] },
-          latency: { auto: true, range: (u, min, max) => [0, max * 1.1] }
+          y: { auto: true, range: (_u, _min, max) => [0, max * 1.1] },
+          latency: { auto: true, range: (_u, _min, max) => [0, max * 1.1] }
         },
         axes: [
           {
@@ -619,7 +619,7 @@
             grid: { stroke: '#21262d', width: 1 },
             ticks: { stroke: '#30363d', width: 1 },
             font: '11px system-ui',
-            values: (u, vals) => vals.map(v => formatNumber(v)),
+            values: (_u, vals) => vals.map(v => formatNumber(v)),
           },
           {
             side: 1,
@@ -628,7 +628,7 @@
             grid: { show: false },
             ticks: { stroke: '#30363d', width: 1 },
             font: '11px system-ui',
-            values: (u, vals) => vals.map(v => formatMs(v)),
+            values: (_u, vals) => vals.map(v => formatMs(v)),
           }
         ],
         series: [
@@ -678,7 +678,7 @@
 
     function handleZoom(minTime, maxTime) {
       const minSpan = 2 * 3600; // 2 hours minimum zoom
-      let span = maxTime - minTime;
+      const span = maxTime - minTime;
       
       // Enforce minimum zoom
       if (span < minSpan) {
@@ -693,7 +693,7 @@
       showLoading(true);
       fetchTrafficData(minTime, maxTime).then(data => {
         if (data !== null) {
-          currentTrafficData = data;
+          _currentTrafficData = data;
           initChart(data);
         }
         showLoading(false);
@@ -766,7 +766,7 @@
         document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
 
         // Update chart
-        currentTrafficData = trafficData;
+        _currentTrafficData = trafficData;
         initChart(trafficData);
 
         // Update user agents and referers
@@ -812,7 +812,7 @@
         return type !== 'browser';
       }).map(ua => ({
         type: 'ua',
-        name: ua.userAgent?.length > 60 ? ua.userAgent.substring(0, 57) + '...' : (ua.userAgent || 'Unknown'),
+        name: ua.userAgent?.length > 60 ? `${ua.userAgent.substring(0, 57)}...` : (ua.userAgent || 'Unknown'),
         full: ua.userAgent,
         hits: ua.hits || ua.count || 0
       }));
@@ -855,9 +855,9 @@
     // Event listeners
     document.querySelectorAll('.time-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.time-btn').forEach(b => { b.classList.remove('active'); });
         btn.classList.add('active');
-        currentDays = parseInt(btn.dataset.days);
+        currentDays = parseInt(btn.dataset.days, 10);
         currentZoom = null; // Reset zoom when changing time range
         updateURL();
         loadData();
@@ -897,7 +897,7 @@
       
       // Update active button
       document.querySelectorAll('.time-btn').forEach(b => {
-        b.classList.toggle('active', parseInt(b.dataset.days) === currentDays);
+        b.classList.toggle('active', parseInt(b.dataset.days, 10) === currentDays);
       });
       
       // Load with zoom if present
@@ -922,7 +922,7 @@
           document.getElementById('uptime').textContent = stats.uptime ? `${stats.uptime.toFixed(4)}%` : '-';
           document.getElementById('uniqueAgents').textContent = formatNumber(uaData.totalCount || 0);
           
-          currentTrafficData = trafficData;
+          _currentTrafficData = trafficData;
           initChart(trafficData);
           allUserAgents = uaData.userAgents;
           renderTrafficSources(uaData.userAgents, referers);
