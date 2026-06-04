@@ -3,6 +3,7 @@
  */
 
 import type { SlackCache } from "../cache";
+import { addCorsHeaders, corsPreflightResponse } from "./cors";
 
 // Cache will be injected by the route system
 
@@ -12,28 +13,7 @@ export type RouteHandlerWithAnalytics = (
 	recordAnalytics: AnalyticsRecorder,
 ) => Promise<Response> | Response;
 
-/**
- * Add CORS headers to a response
- */
-function addCorsHeaders(response: Response): Response {
-	const headers = new Headers(response.headers);
-	headers.set("Access-Control-Allow-Origin", "*");
-	headers.set(
-		"Access-Control-Allow-Methods",
-		"GET, POST, PUT, DELETE, OPTIONS",
-	);
-	headers.set(
-		"Access-Control-Allow-Headers",
-		"Content-Type, Authorization, X-Requested-With",
-	);
-	headers.set("Access-Control-Max-Age", "86400");
 
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers,
-	});
-}
 
 /**
  * Creates analytics wrapper with injected cache
@@ -45,18 +25,8 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 		handler: RouteHandlerWithAnalytics,
 	) {
 		return async (request: Request): Promise<Response> => {
-			// Handle OPTIONS preflight requests
 			if (request.method === "OPTIONS") {
-				return new Response(null, {
-					status: 204,
-					headers: {
-						"Access-Control-Allow-Origin": "*",
-						"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-						"Access-Control-Allow-Headers":
-							"Content-Type, Authorization, X-Requested-With",
-						"Access-Control-Max-Age": "86400",
-					},
-				});
+				return corsPreflightResponse();
 			}
 
 			const startTime = performance.now();
@@ -80,10 +50,8 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 
 				cache.recordRequest(
 					analyticsPath,
-					method,
 					statusCode,
 					userAgent,
-					ipAddress,
 					Number((performance.now() - startTime).toFixed(3)),
 					referer,
 				);
@@ -95,14 +63,3 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 	};
 }
 
-/**
- * Type-safe analytics wrapper that automatically infers path and method
- */
-export function createAnalyticsHandler(
-	cache: SlackCache,
-	path: string,
-	method: string,
-) {
-	return (handler: RouteHandlerWithAnalytics) =>
-		createAnalyticsWrapper(cache)(path, method, handler);
-}

@@ -3,10 +3,13 @@ import { config } from "./config";
 import { getEmojiUrl } from "../utils/emojiHelper";
 import { SlackCache } from "./cache";
 import dashboard from "./dashboard.html";
-import { buildRoutes, getSwaggerSpec } from "./lib/route-builder";
+import { swaggerGenerator } from "./lib/swagger-generator";
+import { addCorsHeaders, corsPreflightResponse } from "./lib/cors";
+import type { RouteDefinition } from "./types/routes";
 import { createApiRoutes } from "./routes/api-routes";
 import { SlackWrapper } from "./slackWrapper";
 import swagger from "./swagger.html";
+import faviconFile from "../favicon.ico";
 
 // Initialize SlackWrapper and Cache
 const slackApp = new SlackWrapper({
@@ -64,32 +67,22 @@ cache.setSlackWrapper(slackApp);
 // Create the typed API routes with injected dependencies
 const apiRoutes = createApiRoutes(cache, slackApp);
 
-// Build Bun-compatible routes and generate Swagger
-const typedRoutes = buildRoutes(apiRoutes);
-const generatedSwagger = getSwaggerSpec();
+// Generate Swagger and convert typed routes to Bun format
+swaggerGenerator.addRoutes(apiRoutes as Record<string, RouteDefinition>);
+const generatedSwagger = swaggerGenerator.getSpec();
 
-/**
- * Add CORS headers to response
- */
-function addCorsHeaders(response: Response): Response {
-	const headers = new Headers(response.headers);
-	headers.set("Access-Control-Allow-Origin", "*");
-	headers.set(
-		"Access-Control-Allow-Methods",
-		"GET, POST, PUT, DELETE, OPTIONS",
-	);
-	headers.set(
-		"Access-Control-Allow-Headers",
-		"Content-Type, Authorization, X-Requested-With",
-	);
-	headers.set("Access-Control-Max-Age", "86400");
-
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers,
-	});
+const typedRoutes: Record<string, Record<string, (request: Request) => Promise<Response> | Response>> = {};
+for (const [path, routeConfig] of Object.entries(apiRoutes as Record<string, RouteDefinition>)) {
+	const bunRoute: Record<string, (request: Request) => Promise<Response> | Response> = {};
+	for (const [method, typedRoute] of Object.entries(routeConfig)) {
+		if (typedRoute && "handler" in typedRoute) {
+			bunRoute[method] = typedRoute.handler;
+		}
+	}
+	typedRoutes[path] = bunRoute;
 }
+
+
 
 // Legacy routes (non-API)
 const legacyRoutes = {
@@ -100,7 +93,7 @@ const legacyRoutes = {
 		return addCorsHeaders(response);
 	},
 	"/favicon.ico": async (_: Request) => {
-		const response = new Response(Bun.file("./favicon.ico"));
+		const response = new Response(faviconFile);
 		return addCorsHeaders(response);
 	},
 
@@ -108,16 +101,7 @@ const legacyRoutes = {
 	"/": async (request: Request) => {
 		// Handle OPTIONS preflight
 		if (request.method === "OPTIONS") {
-			return new Response(null, {
-				status: 204,
-				headers: {
-					"Access-Control-Allow-Origin": "*",
-					"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-					"Access-Control-Allow-Headers":
-						"Content-Type, Authorization, X-Requested-With",
-					"Access-Control-Max-Age": "86400",
-				},
-			});
+			return corsPreflightResponse();
 		}
 
 		const userAgent = request.headers.get("user-agent") || "";

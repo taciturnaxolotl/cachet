@@ -7,6 +7,11 @@ import type {
 	UserAgentData,
 } from "../types/analytics";
 
+
+const SECONDS_PER_10MIN = 600;
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_DAY = 86400;
+
 /**
  * Selects the appropriate bucket table based on time range
  */
@@ -15,11 +20,11 @@ export function selectBucketTable(days: number): {
 	bucketSize: number;
 } {
 	if (days <= 1) {
-		return { table: "traffic_10min", bucketSize: 600 };
+		return { table: "traffic_10min", bucketSize: SECONDS_PER_10MIN };
 	} else if (days <= 30) {
-		return { table: "traffic_hourly", bucketSize: 3600 };
+		return { table: "traffic_hourly", bucketSize: SECONDS_PER_HOUR };
 	} else {
-		return { table: "traffic_daily", bucketSize: 86400 };
+		return { table: "traffic_daily", bucketSize: SECONDS_PER_DAY };
 	}
 }
 
@@ -139,18 +144,16 @@ export class AnalyticsQueryService {
 	 */
 	recordRequest(
 		endpoint: string,
-		_method: string,
 		statusCode: number,
 		userAgent?: string,
-		_ipAddress?: string,
 		responseTime?: number,
 		referer?: string,
 	): void {
 		try {
 			const now = Math.floor(Date.now() / 1000);
-			const bucket10min = now - (now % 600);
-			const bucketHour = now - (now % 3600);
-			const bucketDay = now - (now % 86400);
+			const bucket10min = now - (now % SECONDS_PER_10MIN);
+			const bucketHour = now - (now % SECONDS_PER_HOUR);
+			const bucketDay = now - (now % SECONDS_PER_DAY);
 			const respTime = responseTime || 0;
 			const nowMs = Date.now();
 

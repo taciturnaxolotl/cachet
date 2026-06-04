@@ -4,7 +4,7 @@ import type { SlackUser } from "../slack";
  * Interface for Slack user provider - minimal interface Cache needs
  */
 export interface SlackUserProvider {
-	getUserInfo(userId: string): Promise<SlackUser>;
+	getUserInfo(userId: string): Promise<SlackUser | null>;
 	testAuth(): Promise<boolean>;
 }
 

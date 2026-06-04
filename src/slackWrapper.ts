@@ -96,7 +96,7 @@ class SlackWrapper {
 	 * @returns Promise resolving to the user's information
 	 * @throws Error if the API request fails
 	 */
-	async getUserInfo(userId: string): Promise<SlackUser> {
+	async getUserInfo(userId: string): Promise<SlackUser | null> {
 		const response = await this.limiter.schedule(() =>
 			fetch(`https://slack.com/api/users.info?user=${userId}`, {
 				method: "POST",
@@ -110,11 +110,11 @@ class SlackWrapper {
 		);
 
 		const data = (await response.json()) as SlackUserInfoResponse;
-		if ((!data.ok && data.error !== "user_not_found") || !data.user) {
+		if (!data.ok && data.error !== "user_not_found") {
 			throw new Error(data.error);
 		}
 
-		return data.user;
+		return data.user ?? null;
 	}
 
 	/**

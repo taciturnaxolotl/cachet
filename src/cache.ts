@@ -30,6 +30,16 @@ export type {
 	TrafficOverview,
 } from "./types/analytics";
 
+
+const SECONDS_PER_10MIN = 600;
+const SECONDS_PER_DAY = 86400;
+const MS_PER_HOUR = 3600000;
+const USER_DEFAULT_TTL_HOURS = 7 * 24;
+const USER_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const TOUCH_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+const QUEUE_BATCH_SIZE = 3;
+const QUEUE_INTERVAL_MS = 30 * 1000;
+
 /**
  * Cache class for storing user and emoji data with automatic expiration.
  * Composes AnalyticsQueryService and HealthMonitor for separation of concerns.
@@ -267,8 +277,8 @@ class Cache {
 			Date.now(),
 		]);
 
-		const oneDayAgoSec = Math.floor(Date.now() / 1000) - 86400;
-		const cleanupBucket = oneDayAgoSec - (oneDayAgoSec % 600);
+		const oneDayAgoSec = Math.floor(Date.now() / 1000) - SECONDS_PER_DAY;
+		const cleanupBucket = oneDayAgoSec - (oneDayAgoSec % SECONDS_PER_10MIN);
 		this.db.run("DELETE FROM traffic_10min WHERE bucket < ?", [cleanupBucket]);
 
 		return result2.changes;
@@ -277,7 +287,7 @@ class Cache {
 	private async lazyUserCleanup(): Promise<void> {
 		const currentHour = new Date().getUTCHours();
 		if (currentHour >= 8 && currentHour < 10 && Math.random() < 0.1) {
-			const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+			const sevenDaysAgo = Date.now() - USER_CLEANUP_AGE_MS;
 			const result = this.db.run("DELETE FROM users WHERE expiration < ?", [
 				sevenDaysAgo,
 			]);
@@ -356,7 +366,7 @@ class Cache {
 	private startQueueProcessor() {
 		this.queueIntervalId = setInterval(async () => {
 			await this.processUserUpdateQueue();
-		}, 30 * 1000);
+		}, QUEUE_INTERVAL_MS);
 	}
 
 	private flushTouchRefresh(newExpiration: number, normalizedId: string) {
@@ -384,7 +394,7 @@ class Cache {
 		this.isProcessingQueue = true;
 
 		try {
-			const usersToUpdate = Array.from(this.userUpdateQueue).slice(0, 3);
+			const usersToUpdate = Array.from(this.userUpdateQueue).slice(0, QUEUE_BATCH_SIZE);
 
 			for (const userId of usersToUpdate) {
 				try {
@@ -421,9 +431,9 @@ class Cache {
 		expirationHours?: number,
 	) {
 		const id = crypto.randomUUID();
-		const userDefaultTTL = 7 * 24;
+		const userDefaultTTL = USER_DEFAULT_TTL_HOURS;
 		const expiration =
-			Date.now() + (expirationHours || userDefaultTTL) * 3600000;
+			Date.now() + (expirationHours || userDefaultTTL) * MS_PER_HOUR;
 
 		try {
 			this.db.run(
@@ -457,7 +467,7 @@ class Cache {
 	) {
 		const id = crypto.randomUUID();
 		const expiration =
-			Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
+			Date.now() + (expirationHours || this.defaultExpiration) * MS_PER_HOUR;
 
 		try {
 			this.db.run(
@@ -488,7 +498,7 @@ class Cache {
 	): Promise<boolean> {
 		try {
 			const expiration =
-				Date.now() + (expirationHours || this.defaultExpiration) * 3600000;
+				Date.now() + (expirationHours || this.defaultExpiration) * MS_PER_HOUR;
 
 			this.db.transaction(() => {
 				for (const emoji of emojis) {
@@ -534,11 +544,11 @@ class Cache {
 			return null;
 		}
 
-		const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000;
-		const userAge = expiration - 7 * 24 * 60 * 60 * 1000;
+		const twentyFourHoursAgo = now - TOUCH_REFRESH_THRESHOLD_MS;
+		const userAge = expiration - USER_CLEANUP_AGE_MS;
 
 		if (userAge < twentyFourHoursAgo) {
-			const newExpiration = now + 7 * 24 * 60 * 60 * 1000;
+			const newExpiration = now + USER_CLEANUP_AGE_MS;
 			this.flushTouchRefresh(newExpiration, normalizedId);
 			this.queueUserUpdate(normalizedId);
 			console.log(
@@ -594,14 +604,12 @@ class Cache {
 
 	recordRequest(
 		endpoint: string,
-		_method: string,
 		statusCode: number,
 		userAgent?: string,
-		_ipAddress?: string,
 		responseTime?: number,
 		referer?: string,
 	): void {
-		this.analytics.recordRequest(endpoint, _method, statusCode, userAgent, _ipAddress, responseTime, referer);
+		this.analytics.recordRequest(endpoint, statusCode, userAgent, responseTime, referer);
 	}
 
 	async getAnalytics(days: number = 7): Promise<FullAnalyticsData> {

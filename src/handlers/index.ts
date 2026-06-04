@@ -15,6 +15,26 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+
+	/**
+	 * Validates Bearer token authorization. Returns an error Response if unauthorized,
+	 * or null if authorized.
+	 */
+	function requireAuth(request: Request, recordAnalytics: (code: number) => void): Response | null {
+		const token = config.bearerToken;
+		if (!token) {
+			console.error("BEARER_TOKEN is not configured");
+			recordAnalytics(500);
+			return new Response("Server misconfigured", { status: 500 });
+		}
+		const authHeader = request.headers.get("authorization") || "";
+		if (authHeader !== `Bearer ${token}`) {
+			recordAnalytics(401);
+			return new Response("Unauthorized", { status: 401 });
+		}
+		return null;
+	}
+
 /**
  * Creates all handlers with dependencies bound via closure.
  * Eliminates global mutable state and injectDependencies pattern.
@@ -114,18 +134,8 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const configuredToken = config.bearerToken;
-		if (!configuredToken) {
-			console.error("BEARER_TOKEN is not configured");
-			recordAnalytics(500);
-			return new Response("Server misconfigured", { status: 500 });
-		}
-
-		const authHeader = request.headers.get("authorization") || "";
-		if (authHeader !== `Bearer ${configuredToken}`) {
-			recordAnalytics(401);
-			return new Response("Unauthorized", { status: 401 });
-		}
+		const authError = requireAuth(request, recordAnalytics);
+		if (authError) return authError;
 
 		const url = new URL(request.url);
 		const userId = url.pathname.split("/")[2] || "";
@@ -190,18 +200,9 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const configuredToken = config.bearerToken;
-		if (!configuredToken) {
-			console.error("BEARER_TOKEN is not configured");
-			recordAnalytics(500);
-			return new Response("Server misconfigured", { status: 500 });
-		}
+		const authError = requireAuth(request, recordAnalytics);
+		if (authError) return authError;
 
-		const authHeader = request.headers.get("authorization") || "";
-		if (authHeader !== `Bearer ${configuredToken}`) {
-			recordAnalytics(401);
-			return new Response("Unauthorized", { status: 401 });
-		}
 		const result = await cache.purgeAll();
 		recordAnalytics(200);
 		return Response.json(result);
