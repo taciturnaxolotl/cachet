@@ -9,7 +9,11 @@ permissions:
   deployments: write
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yaml
+
   deploy:
+    needs: ci
     uses: taciturnaxolotl/dots/.github/workflows/deploy-service.yml@main
     with:
       service: cachet

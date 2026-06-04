@@ -6,7 +6,12 @@
 		"dev": "bun run --watch src/index.ts",
 		"start": "bun run src/index.ts",
 		"build": "bun build --compile --outfile dist/cachet --production ./src/index.ts",
-		"test:watch": "bun test --watch"
+		"test:watch": "bun test --watch",
+		"format": "biome format --write .",
+		"format:check": "biome format --error-on-warnings .",
+		"lint": "biome lint --error-on-warnings .",
+		"lint:fix": "biome lint --write .",
+		"check": "biome check --write ."
 	},
 	"dependencies": {
 		"@tqman/nice-logger": "^1.1.1",
