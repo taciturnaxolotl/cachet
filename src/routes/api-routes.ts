@@ -453,9 +453,9 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 			),
 		},
 
-		"/stats/traffic": {
+		"/api/stats/traffic": {
 			GET: createRoute(
-				withAnalytics("/stats/traffic", "GET", handlers.handleGetTraffic),
+				withAnalytics("/api/stats/traffic", "GET", handlers.handleGetTraffic),
 				{
 					summary: "Get traffic time-series data",
 					description:
@@ -510,9 +510,9 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 			),
 		},
 
-		"/stats": {
+		"/api/stats": {
 			GET: createRoute(
-				withAnalytics("/stats", "GET", handlers.handleGetStats),
+				withAnalytics("/api/stats", "GET", handlers.handleGetStats),
 				{
 					summary: "Get complete analytics (legacy)",
 					description:
@@ -544,68 +544,11 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 			),
 		},
 
-		"/stats/essential": {
-			GET: createRoute(
-				withAnalytics(
-					"/stats/essential",
-					"GET",
-					handlers.handleGetEssentialStats,
-				),
-				{
-					summary: "Get essential stats",
-					description: "Fast-loading essential statistics for the dashboard",
-					tags: ["Analytics"],
-					parameters: {
-						query: [
-							queryParam(
-								"days",
-								"number",
-								"Number of days to analyze",
-								false,
-								7,
-							),
-						],
-					},
-					responses: Object.fromEntries([
-						apiResponse(200, "Essential stats retrieved", {
-							type: "object",
-							properties: {
-								totalRequests: { type: "number" },
-								averageResponseTime: { type: "number" },
-								uptime: { type: "number" },
-							},
-						}),
-					]),
-				},
-			),
-		},
 
-		"/stats/useragents": {
-			GET: createRoute(
-				withAnalytics("/stats/useragents", "GET", handlers.handleGetUserAgents),
-				{
-					summary: "Get user agents",
-					description: "Cumulative user agent statistics",
-					tags: ["Analytics"],
-					responses: Object.fromEntries([
-						apiResponse(200, "User agents retrieved", {
-							type: "array",
-							items: {
-								type: "object",
-								properties: {
-									userAgent: { type: "string" },
-									hits: { type: "number" },
-								},
-							},
-						}),
-					]),
-				},
-			),
-		},
 
-		"/stats/referers": {
+		"/api/stats/referers": {
 			GET: createRoute(
-				withAnalytics("/stats/referers", "GET", handlers.handleGetReferers),
+				withAnalytics("/api/stats/referers", "GET", handlers.handleGetReferers),
 				{
 					summary: "Get referer sources",
 					description:

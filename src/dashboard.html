@@ -715,7 +715,7 @@
       abortController = new AbortController();
 
       try {
-        let url = '/stats/traffic';
+        let url = '/api/stats/traffic';
         if (startTime && endTime) {
           url += `?start=${Math.floor(startTime)}&end=${Math.floor(endTime)}`;
         } else {
@@ -743,10 +743,10 @@
       try {
         // Fetch stats and traffic in parallel
         const [statsRes, trafficData, uaRes, refRes] = await Promise.all([
-          fetch(`/stats/essential?days=${currentDays}`),
+          fetch(`/api/stats/essential?days=${currentDays}`),
           fetchTrafficData(),
-          fetch('/stats/useragents'),
-          fetch('/stats/referers')
+          fetch('/api/stats/useragents'),
+          fetch('/api/stats/referers')
         ]);
 
         // If traffic fetch was superseded, don't update
@@ -904,10 +904,10 @@
       if (currentZoom) {
         showLoading(true);
         Promise.all([
-          fetch(`/stats/essential?days=${currentDays}`),
+          fetch(`/api/stats/essential?days=${currentDays}`),
           fetchTrafficData(currentZoom.start, currentZoom.end),
-          fetch('/stats/useragents'),
-          fetch('/stats/referers')
+          fetch('/api/stats/useragents'),
+          fetch('/api/stats/referers')
         ]).then(async ([statsRes, trafficData, uaRes, refRes]) => {
           if (trafficData === null) {
             showLoading(false);
