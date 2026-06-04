@@ -9,17 +9,17 @@ import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 /**
  * Parse a string to a positive integer, returning a fallback if invalid
  */
-function parsePositiveInt(value: string | null, fallback: number): number {
+export function parsePositiveInt(value: string | null, fallback: number): number {
 	if (!value) return fallback;
 	const n = Number.parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-
-	/**
-	 * Validates Bearer token authorization. Returns an error Response if unauthorized,
-	 * or null if authorized.
-	 */
+/**
+ * Creates all handlers with dependencies bound via closure.
+ * Eliminates global mutable state and injectDependencies pattern.
+ */
+export function createHandlers(cache: SlackCache) {
 	function requireAuth(request: Request, recordAnalytics: (code: number) => void): Response | null {
 		const token = config.bearerToken;
 		if (!token) {
@@ -35,11 +35,6 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 		return null;
 	}
 
-/**
- * Creates all handlers with dependencies bound via closure.
- * Eliminates global mutable state and injectDependencies pattern.
- */
-export function createHandlers(cache: SlackCache) {
 	const handleHealthCheck: RouteHandlerWithAnalytics = async (
 		request,
 		recordAnalytics,

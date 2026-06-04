@@ -17,7 +17,7 @@ export interface AppConfig {
 	};
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
+export function parsePositiveInt(value: string | undefined, fallback: number): number {
 	if (!value) return fallback;
 	const n = Number.parseInt(value, 10);
 	return Number.isFinite(n) && n > 0 ? n : fallback;

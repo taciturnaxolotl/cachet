@@ -76,6 +76,7 @@ class Cache {
 		this.onEmojiExpired = onEmojiExpired;
 
 		this.optimizeSQLite();
+		this.initDatabase();
 
 		this.analytics = new AnalyticsQueryService(this.db);
 		this.healthMonitor = new HealthMonitor(
@@ -83,8 +84,8 @@ class Cache {
 			() => this.userUpdateQueue.size,
 		);
 
-		this.initDatabase();
 		this.initPreparedStatements();
+		this.healthMonitor.startUptimeSession();
 		this.setupPurgeSchedule();
 		this.startQueueProcessor();
 
@@ -212,7 +213,6 @@ class Cache {
 			}
 		}
 
-		this.healthMonitor.startUptimeSession();
 	}
 
 	private setupPurgeSchedule() {
