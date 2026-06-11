@@ -219,9 +219,24 @@ export class AnalyticsQueryService {
 		try {
 			this.db.transaction(() => {
 				for (const entry of batch) {
-					this.stmtTraffic10min.run(entry.bucket10min, entry.endpoint, entry.statusCode, entry.respTime);
-					this.stmtTrafficHourly.run(entry.bucketHour, entry.endpoint, entry.statusCode, entry.respTime);
-					this.stmtTrafficDaily.run(entry.bucketDay, entry.endpoint, entry.statusCode, entry.respTime);
+					this.stmtTraffic10min.run(
+						entry.bucket10min,
+						entry.endpoint,
+						entry.statusCode,
+						entry.respTime,
+					);
+					this.stmtTrafficHourly.run(
+						entry.bucketHour,
+						entry.endpoint,
+						entry.statusCode,
+						entry.respTime,
+					);
+					this.stmtTrafficDaily.run(
+						entry.bucketDay,
+						entry.endpoint,
+						entry.statusCode,
+						entry.respTime,
+					);
 
 					if (entry.userAgent) {
 						this.stmtUserAgent.run(entry.userAgent, entry.nowMs);

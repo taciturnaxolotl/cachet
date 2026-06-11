@@ -38,9 +38,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				const userAgent = request.headers.get("user-agent") || "";
 				const referer = request.headers.get("referer") || undefined;
 
-				const analyticsPath = isDynamic
-					? new URL(request.url).pathname
-					: path;
+				const analyticsPath = isDynamic ? new URL(request.url).pathname : path;
 
 				cache.recordRequest(
 					analyticsPath,
