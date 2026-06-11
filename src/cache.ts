@@ -42,6 +42,8 @@ const USER_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const TOUCH_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 const QUEUE_BATCH_SIZE = 3;
 const QUEUE_INTERVAL_MS = 30 * 1000;
+const LRU_MAX_SIZE = 2000;
+const LRU_TTL_MS = 60_000;
 
 /**
  * Cache class for storing user and emoji data with automatic expiration.
@@ -68,6 +70,10 @@ class Cache {
 	// Prepared statements for cache lookups
 	private stmtGetUser!: import("bun:sqlite").Statement;
 	private stmtGetEmoji!: import("bun:sqlite").Statement;
+
+	// In-memory LRU caches (Map preserves insertion order)
+	private userCache = new Map<string, { data: User; ts: number }>();
+	private emojiCache = new Map<string, { data: Emoji; ts: number }>();
 
 	constructor(
 		dbPath: string,
@@ -297,6 +303,8 @@ class Cache {
 			Date.now(),
 		]);
 
+		this.emojiCache.clear();
+
 		const oneDayAgoSec = Math.floor(Date.now() / 1000) - SECONDS_PER_DAY;
 		const cleanupBucket = oneDayAgoSec - (oneDayAgoSec % SECONDS_PER_10MIN);
 		this.db.run("DELETE FROM traffic_10min WHERE bucket < ?", [cleanupBucket]);
@@ -321,9 +329,11 @@ class Cache {
 
 	async purgeUserCache(userId: string): Promise<boolean> {
 		try {
+			const normalizedId = userId.toUpperCase();
 			const result = this.db.run("DELETE FROM users WHERE userId = ?", [
-				userId.toUpperCase(),
+				normalizedId,
 			]);
+			this.userCache.delete(normalizedId);
 			return result.changes > 0;
 		} catch (error) {
 			console.error("Error purging user cache:", error);
@@ -338,6 +348,9 @@ class Cache {
 	}> {
 		const result = this.db.run("DELETE FROM users");
 		const result2 = this.db.run("DELETE FROM emojis");
+
+		this.userCache.clear();
+		this.emojiCache.clear();
 
 		if (this.onEmojiExpired) {
 			if (result2.changes > 0) {
@@ -475,6 +488,7 @@ class Cache {
 					expiration,
 				],
 			);
+			this.userCache.delete(userId.toUpperCase());
 			return true;
 		} catch (error) {
 			console.error("Error inserting/updating user:", error);
@@ -508,6 +522,7 @@ class Cache {
 					expiration,
 				],
 			);
+			this.emojiCache.delete(name.toLowerCase());
 			return true;
 		} catch (error) {
 			console.error("Error inserting/updating emoji:", error);
@@ -544,6 +559,7 @@ class Cache {
 				}
 			})();
 
+			this.emojiCache.clear();
 			return true;
 		} catch (error) {
 			console.error("Error batch inserting emojis:", error);
@@ -553,13 +569,27 @@ class Cache {
 
 	async getUser(userId: string): Promise<User | null> {
 		const normalizedId = userId.toUpperCase();
+		const now = Date.now();
+
+		// Check in-memory LRU cache
+		const cached = this.userCache.get(normalizedId);
+		if (cached) {
+			if (now - cached.ts < LRU_TTL_MS) {
+				// Move to end (most recently used)
+				this.userCache.delete(normalizedId);
+				this.userCache.set(normalizedId, cached);
+				return cached.data;
+			}
+			// Expired from LRU
+			this.userCache.delete(normalizedId);
+		}
+
 		const result = this.stmtGetUser.get(normalizedId) as User;
 
 		if (!result) {
 			return null;
 		}
 
-		const now = Date.now();
 		const expiration = new Date(result.expiration).getTime();
 
 		if (expiration < now) {
@@ -579,7 +609,7 @@ class Cache {
 			);
 		}
 
-		return {
+		const user: User = {
 			type: "user",
 			id: result.id,
 			userId: result.userId,
@@ -588,24 +618,53 @@ class Cache {
 			imageUrl: result.imageUrl,
 			expiration: new Date(result.expiration),
 		};
+
+		// Populate LRU cache with eviction
+		if (this.userCache.size >= LRU_MAX_SIZE) {
+			const firstKey = this.userCache.keys().next().value;
+			if (firstKey !== undefined) this.userCache.delete(firstKey);
+		}
+		this.userCache.set(normalizedId, { data: user, ts: now });
+
+		return user;
 	}
 
 	async getEmoji(name: string): Promise<Emoji | null> {
-		const result = this.stmtGetEmoji.get(
-			name.toLowerCase(),
-			Date.now(),
-		) as Emoji;
+		const normalizedName = name.toLowerCase();
+		const now = Date.now();
 
-		return result
-			? {
-					type: "emoji",
-					id: result.id,
-					name: result.name,
-					alias: result.alias || null,
-					imageUrl: result.imageUrl,
-					expiration: new Date(result.expiration),
-				}
-			: null;
+		// Check in-memory LRU cache
+		const cached = this.emojiCache.get(normalizedName);
+		if (cached) {
+			if (now - cached.ts < LRU_TTL_MS) {
+				this.emojiCache.delete(normalizedName);
+				this.emojiCache.set(normalizedName, cached);
+				return cached.data;
+			}
+			this.emojiCache.delete(normalizedName);
+		}
+
+		const result = this.stmtGetEmoji.get(normalizedName, now) as Emoji;
+
+		if (!result) return null;
+
+		const emoji: Emoji = {
+			type: "emoji",
+			id: result.id,
+			name: result.name,
+			alias: result.alias || null,
+			imageUrl: result.imageUrl,
+			expiration: new Date(result.expiration),
+		};
+
+		// Populate LRU cache with eviction
+		if (this.emojiCache.size >= LRU_MAX_SIZE) {
+			const firstKey = this.emojiCache.keys().next().value;
+			if (firstKey !== undefined) this.emojiCache.delete(firstKey);
+		}
+		this.emojiCache.set(normalizedName, { data: emoji, ts: now });
+
+		return emoji;
 	}
 
 	async getAllEmojis(): Promise<Emoji[]> {
