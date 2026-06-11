@@ -196,7 +196,12 @@ export class AnalyticsQueryService {
 		});
 
 		if (this.writeBuffer.length >= this.MAX_BUFFER_SIZE) {
-			this.flushWriteBuffer();
+			// Defer flush so it doesn't block the current request's response
+			if (!this.flushTimer) {
+				this.flushTimer = setTimeout(() => {
+					this.flushWriteBuffer();
+				}, 0);
+			}
 		} else if (!this.flushTimer) {
 			this.flushTimer = setTimeout(() => {
 				this.flushWriteBuffer();
