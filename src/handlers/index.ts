@@ -5,6 +5,7 @@
 import type { SlackCache } from "../cache";
 import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
+import { lastSegment, pathSegment, queryParam } from "../lib/fast-url";
 
 /**
  * Parse a string to a positive integer, returning a fallback if invalid
@@ -45,8 +46,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const detailed = url.searchParams.get("detailed") === "true";
+		const detailed = queryParam(request.url, "detailed") === "true";
 
 		if (detailed) {
 			const health = await cache.detailedHealthCheck();
@@ -81,8 +81,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const userId = url.pathname.split("/").pop() || "";
+		const userId = lastSegment(request.url);
 		const user = await cache.getUser(userId);
 
 		if (!user?.imageUrl) {
@@ -108,9 +107,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const parts = url.pathname.split("/");
-		const userId = parts[2] || "";
+		const userId = pathSegment(request.url, 1);
 		const user = await cache.getUser(userId);
 
 		if (!user?.imageUrl) {
@@ -138,8 +135,7 @@ export function createHandlers(cache: SlackCache) {
 		const authError = requireAuth(request, recordAnalytics);
 		if (authError) return authError;
 
-		const url = new URL(request.url);
-		const userId = url.pathname.split("/")[2] || "";
+		const userId = pathSegment(request.url, 1);
 		const result = await cache.purgeUserCache(userId);
 
 		recordAnalytics(200);
@@ -163,8 +159,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const emojiName = url.pathname.split("/").pop() || "";
+		const emojiName = lastSegment(request.url);
 		const emoji = await cache.getEmoji(emojiName);
 
 		if (!emoji) {
@@ -180,9 +175,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const parts = url.pathname.split("/");
-		const emojiName = parts[2] || "";
+		const emojiName = pathSegment(request.url, 1);
 		const emoji = await cache.getEmoji(emojiName);
 
 		if (!emoji) {
@@ -213,9 +206,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const params = new URLSearchParams(url.search);
-		const days = parsePositiveInt(params.get("days"), 7);
+		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
 
 		const stats = await cache.getEssentialStats(days);
 		recordAnalytics(200);
@@ -226,9 +217,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const params = new URLSearchParams(url.search);
-		const days = parsePositiveInt(params.get("days"), 7);
+		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
 
 		const chartData = await cache.getChartData(days);
 		recordAnalytics(200);
@@ -260,11 +249,8 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const params = new URLSearchParams(url.search);
-
-		const startParam = params.get("start");
-		const endParam = params.get("end");
+		const startParam = queryParam(request.url, "start");
+		const endParam = queryParam(request.url, "end");
 
 		const options: { days?: number; startTime?: number; endTime?: number } = {};
 
@@ -278,7 +264,7 @@ export function createHandlers(cache: SlackCache) {
 				options.days = 7;
 			}
 		} else {
-			options.days = parsePositiveInt(params.get("days"), 7);
+			options.days = parsePositiveInt(queryParam(request.url, "days"), 7);
 		}
 
 		const traffic = cache.getTraffic(options);
@@ -290,9 +276,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const url = new URL(request.url);
-		const params = new URLSearchParams(url.search);
-		const days = parsePositiveInt(params.get("days"), 7);
+		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
 
 		const [essentialStats, chartData, userAgents] = await Promise.all([
 			cache.getEssentialStats(days),

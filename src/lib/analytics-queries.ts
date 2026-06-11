@@ -174,10 +174,12 @@ export class AnalyticsQueryService {
 
 		let refererHost: string | null = null;
 		if (referer) {
-			try {
-				refererHost = new URL(referer).host || null;
-			} catch {
-				// Invalid URL, skip
+			// Fast host extraction: skip "https://" then take until next "/"
+			const i = referer.indexOf("://");
+			if (i !== -1) {
+				const start = i + 3;
+				const end = referer.indexOf("/", start);
+				refererHost = end === -1 ? referer.substring(start) : referer.substring(start, end);
 			}
 		}
 

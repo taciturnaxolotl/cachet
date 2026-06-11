@@ -4,6 +4,7 @@
 
 import type { SlackCache } from "../cache";
 import { addCorsHeaders, corsPreflightResponse } from "./cors";
+import { fastPathname } from "./fast-url";
 
 export type AnalyticsRecorder = (statusCode: number) => void;
 export type RouteHandlerWithAnalytics = (
@@ -68,7 +69,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 
 			const recordAnalytics: AnalyticsRecorder = (statusCode) => {
 				cache.recordRequest(
-					new URL(request.url).pathname,
+					fastPathname(request.url),
 					statusCode,
 					userAgent,
 					performance.now() - startTime,
