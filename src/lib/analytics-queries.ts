@@ -90,6 +90,22 @@ export class AnalyticsQueryService {
 	private stmtUserAgent!: Statement;
 	private stmtReferer!: Statement;
 
+	// Write buffer for batched analytics recording
+	private writeBuffer: Array<{
+		bucket10min: number;
+		bucketHour: number;
+		bucketDay: number;
+		endpoint: string;
+		statusCode: number;
+		respTime: number;
+		userAgent: string | null;
+		refererHost: string | null;
+		nowMs: number;
+	}> = [];
+	private flushTimer: ReturnType<typeof setTimeout> | null = null;
+	private readonly FLUSH_INTERVAL_MS = 50;
+	private readonly MAX_BUFFER_SIZE = 200;
+
 	constructor(db: Database) {
 		this.db = db;
 		this.typedAnalyticsCache = new AnalyticsCache();
@@ -139,7 +155,8 @@ export class AnalyticsQueryService {
 	}
 
 	/**
-	 * Records a request for analytics using bucketed time-series storage
+	 * Records a request by buffering it for batched writing.
+	 * Entries are flushed every 50ms or when the buffer reaches MAX_BUFFER_SIZE.
 	 */
 	recordRequest(
 		endpoint: string,
@@ -148,36 +165,75 @@ export class AnalyticsQueryService {
 		responseTime?: number,
 		referer?: string,
 	): void {
+		const now = Math.floor(Date.now() / 1000);
+		const bucket10min = now - (now % SECONDS_PER_10MIN);
+		const bucketHour = now - (now % SECONDS_PER_HOUR);
+		const bucketDay = now - (now % SECONDS_PER_DAY);
+		const respTime = responseTime || 0;
+		const nowMs = Date.now();
+
+		let refererHost: string | null = null;
+		if (referer) {
+			try {
+				refererHost = new URL(referer).host || null;
+			} catch {
+				// Invalid URL, skip
+			}
+		}
+
+		this.writeBuffer.push({
+			bucket10min,
+			bucketHour,
+			bucketDay,
+			endpoint,
+			statusCode,
+			respTime,
+			userAgent: userAgent || null,
+			refererHost,
+			nowMs,
+		});
+
+		if (this.writeBuffer.length >= this.MAX_BUFFER_SIZE) {
+			this.flushWriteBuffer();
+		} else if (!this.flushTimer) {
+			this.flushTimer = setTimeout(() => {
+				this.flushWriteBuffer();
+			}, this.FLUSH_INTERVAL_MS);
+		}
+	}
+
+	/**
+	 * Flushes the write buffer in a single transaction
+	 */
+	flushWriteBuffer(): void {
+		if (this.flushTimer) {
+			clearTimeout(this.flushTimer);
+			this.flushTimer = null;
+		}
+
+		if (this.writeBuffer.length === 0) return;
+
+		const batch = this.writeBuffer;
+		this.writeBuffer = [];
+
 		try {
-			const now = Math.floor(Date.now() / 1000);
-			const bucket10min = now - (now % SECONDS_PER_10MIN);
-			const bucketHour = now - (now % SECONDS_PER_HOUR);
-			const bucketDay = now - (now % SECONDS_PER_DAY);
-			const respTime = responseTime || 0;
-			const nowMs = Date.now();
+			this.db.transaction(() => {
+				for (const entry of batch) {
+					this.stmtTraffic10min.run(entry.bucket10min, entry.endpoint, entry.statusCode, entry.respTime);
+					this.stmtTrafficHourly.run(entry.bucketHour, entry.endpoint, entry.statusCode, entry.respTime);
+					this.stmtTrafficDaily.run(entry.bucketDay, entry.endpoint, entry.statusCode, entry.respTime);
 
-			let refererHost: string | null = null;
-			if (referer) {
-				try {
-					refererHost = new URL(referer).host || null;
-				} catch {
-					// Invalid URL, skip
+					if (entry.userAgent) {
+						this.stmtUserAgent.run(entry.userAgent, entry.nowMs);
+					}
+
+					if (entry.refererHost) {
+						this.stmtReferer.run(entry.refererHost, entry.nowMs);
+					}
 				}
-			}
-
-			this.stmtTraffic10min.run(bucket10min, endpoint, statusCode, respTime);
-			this.stmtTrafficHourly.run(bucketHour, endpoint, statusCode, respTime);
-			this.stmtTrafficDaily.run(bucketDay, endpoint, statusCode, respTime);
-
-			if (userAgent) {
-				this.stmtUserAgent.run(userAgent, nowMs);
-			}
-
-			if (refererHost) {
-				this.stmtReferer.run(refererHost, nowMs);
-			}
+			})();
 		} catch (error) {
-			console.error("Error recording request analytics:", error);
+			console.error("Error flushing analytics write buffer:", error);
 		}
 	}
 

@@ -625,6 +625,10 @@ class Cache {
 
 	// --- Delegated analytics methods ---
 
+	flushAnalytics(): void {
+		this.analytics.flushWriteBuffer();
+	}
+
 	recordRequest(
 		endpoint: string,
 		statusCode: number,
@@ -642,14 +646,17 @@ class Cache {
 	}
 
 	async getAnalytics(days: number = 7): Promise<FullAnalyticsData> {
+		this.analytics.flushWriteBuffer();
 		return this.analytics.getAnalytics(days, () => this.getUptime());
 	}
 
 	async getEssentialStats(days: number = 7): Promise<EssentialStatsData> {
+		this.analytics.flushWriteBuffer();
 		return this.analytics.getEssentialStats(days, () => this.getUptime());
 	}
 
 	async getChartData(days: number = 7): Promise<ChartData> {
+		this.analytics.flushWriteBuffer();
 		return this.analytics.getChartData(days);
 	}
 
@@ -686,6 +693,7 @@ class Cache {
 		}
 
 		this.healthMonitor.endUptimeSession();
+		this.analytics.flushWriteBuffer();
 		this.db.close();
 	}
 }
