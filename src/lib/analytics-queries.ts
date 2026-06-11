@@ -179,7 +179,8 @@ export class AnalyticsQueryService {
 			if (i !== -1) {
 				const start = i + 3;
 				const end = referer.indexOf("/", start);
-				refererHost = end === -1 ? referer.substring(start) : referer.substring(start, end);
+				refererHost =
+					end === -1 ? referer.substring(start) : referer.substring(start, end);
 			}
 		}
 
