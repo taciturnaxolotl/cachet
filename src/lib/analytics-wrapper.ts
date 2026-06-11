@@ -5,8 +5,6 @@
 import type { SlackCache } from "../cache";
 import { addCorsHeaders, corsPreflightResponse } from "./cors";
 
-// Cache will be injected by the route system
-
 export type AnalyticsRecorder = (statusCode: number) => void;
 export type RouteHandlerWithAnalytics = (
 	request: Request,
@@ -22,6 +20,9 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 		_method: string,
 		handler: RouteHandlerWithAnalytics,
 	) {
+		// Pre-compute whether this path is dynamic to avoid new URL() on every request
+		const isDynamic = path.includes(":");
+
 		return async (request: Request): Promise<Response> => {
 			if (request.method === "OPTIONS") {
 				return corsPreflightResponse();
@@ -30,27 +31,22 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 			const startTime = performance.now();
 
 			const recordAnalytics: AnalyticsRecorder = (statusCode: number) => {
-				// Skip analytics entirely for health checks to reduce database load
 				if (path === "/health") {
 					return;
 				}
 
 				const userAgent = request.headers.get("user-agent") || "";
-				const _ipAddress =
-					request.headers.get("x-forwarded-for") ||
-					request.headers.get("x-real-ip") ||
-					"unknown";
 				const referer = request.headers.get("referer") || undefined;
 
-				// Use the pathname for dynamic paths to ensure proper endpoint grouping
-				const requestUrl = new URL(request.url);
-				const analyticsPath = path.includes(":") ? requestUrl.pathname : path;
+				const analyticsPath = isDynamic
+					? new URL(request.url).pathname
+					: path;
 
 				cache.recordRequest(
 					analyticsPath,
 					statusCode,
 					userAgent,
-					Number((performance.now() - startTime).toFixed(3)),
+					performance.now() - startTime,
 					referer,
 				);
 			};
