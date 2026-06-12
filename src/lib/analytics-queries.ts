@@ -819,6 +819,9 @@ export class AnalyticsQueryService {
 				SELECT referer_host as refererHost, hits
 				FROM referer_stats
 				WHERE referer_host IS NOT NULL
+				AND referer_host NOT LIKE 'localhost%'
+				AND referer_host NOT LIKE '127.0.0.1%'
+				AND referer_host NOT LIKE '::1%'
 				ORDER BY hits DESC
 				LIMIT 50
 				`,
