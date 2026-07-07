@@ -93,7 +93,7 @@ export function createHandlers(cache: SlackCache) {
 					userId: userId.toUpperCase(),
 					displayName: "Unknown",
 					pronouns: "",
-					imageUrl: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
+					imageUrl: "https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
 				},
 				{ status: 202 },
 			);
@@ -116,7 +116,7 @@ export function createHandlers(cache: SlackCache) {
 			return new Response(null, {
 				status: 307,
 				headers: {
-					Location: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
+					Location: "https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
 				},
 			});
 		}

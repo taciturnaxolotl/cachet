@@ -156,7 +156,7 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 									pronouns: { type: "string", example: "" },
 									imageUrl: {
 										type: "string",
-										example: "https://l4.dunkirk.sh/i/5DjfoBI58Pfw.webp",
+										example: "https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
 									},
 								},
 							},
