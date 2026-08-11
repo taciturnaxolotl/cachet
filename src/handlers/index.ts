@@ -6,6 +6,7 @@ import type { SlackCache } from "../cache";
 import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 import { lastSegment, pathSegment, queryParam } from "../lib/fast-url";
+import { getEmojiUrl } from "../../utils/emojiHelper";
 
 /**
  * Parse a string to a positive integer, returning a fallback if invalid
@@ -163,8 +164,21 @@ export function createHandlers(cache: SlackCache) {
 		const emoji = await cache.getEmoji(emojiName);
 
 		if (!emoji) {
-			recordAnalytics(404);
-			return Response.json({ message: "Emoji not found" }, { status: 404 });
+			const nativeEmojiUrl = getEmojiUrl(emojiName);
+			if (!nativeEmojiUrl) {
+				recordAnalytics(404);
+				return Response.json({ message: "Emoji not found" }, { status: 404 });
+			}
+
+			recordAnalytics(200);
+			return Response.json({
+				type: "emoji",
+				id: `native:${emojiName.toLowerCase()}`,
+				name: emojiName.toLowerCase(),
+				alias: null,
+				imageUrl: nativeEmojiUrl,
+				expiration: null,
+			});
 		}
 
 		recordAnalytics(200);
@@ -179,8 +193,17 @@ export function createHandlers(cache: SlackCache) {
 		const emoji = await cache.getEmoji(emojiName);
 
 		if (!emoji) {
-			recordAnalytics(404);
-			return Response.json({ message: "Emoji not found" }, { status: 404 });
+			const nativeEmojiUrl = getEmojiUrl(emojiName);
+			if (!nativeEmojiUrl) {
+				recordAnalytics(404);
+				return Response.json({ message: "Emoji not found" }, { status: 404 });
+			}
+
+			recordAnalytics(302);
+			return new Response(null, {
+				status: 302,
+				headers: { Location: nativeEmojiUrl },
+			});
 		}
 
 		recordAnalytics(302);
