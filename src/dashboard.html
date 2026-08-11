@@ -466,6 +466,12 @@
       return n.toLocaleString();
     }
 
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
+    }
+
     function formatMs(ms) {
       if (ms === null || ms === undefined) return '-';
       if (ms < 0.01) return '0ms';
@@ -844,7 +850,7 @@
         return `
           <div class="ua-item">
             <span class="ua-rank ${rankClass}">${i + 1}</span>
-            <span class="ua-name" title="${item.full}">${item.name}</span>
+            <span class="ua-name" title="${escapeHtml(item.full)}">${escapeHtml(item.name)}</span>
             <span class="ua-count">${formatNumber(item.hits)}</span>
           </div>
         `;
