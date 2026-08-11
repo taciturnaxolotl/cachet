@@ -20,6 +20,13 @@ export function parsePositiveInt(
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+/** Analytics results are cached per day count, so bound it to keep the cache from thrashing */
+const MAX_DAYS = 365;
+
+function parseDays(url: string): number {
+	return Math.min(parsePositiveInt(queryParam(url, "days"), 7), MAX_DAYS);
+}
+
 /**
  * Creates all handlers with dependencies bound via closure.
  * Eliminates global mutable state and injectDependencies pattern.
@@ -229,7 +236,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
+		const days = parseDays(request.url);
 
 		const stats = await cache.getEssentialStats(days);
 		recordAnalytics(200);
@@ -240,7 +247,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
+		const days = parseDays(request.url);
 
 		const chartData = await cache.getChartData(days);
 		recordAnalytics(200);
@@ -287,7 +294,7 @@ export function createHandlers(cache: SlackCache) {
 				options.days = 7;
 			}
 		} else {
-			options.days = parsePositiveInt(queryParam(request.url, "days"), 7);
+			options.days = parseDays(request.url);
 		}
 
 		const traffic = cache.getTraffic(options);
@@ -299,7 +306,7 @@ export function createHandlers(cache: SlackCache) {
 		request,
 		recordAnalytics,
 	) => {
-		const days = parsePositiveInt(queryParam(request.url, "days"), 7);
+		const days = parseDays(request.url);
 
 		const [essentialStats, chartData, userAgents] = await Promise.all([
 			cache.getEssentialStats(days),
