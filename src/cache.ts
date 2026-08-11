@@ -1,38 +1,38 @@
 import { Database } from "bun:sqlite";
-import { schedule, type ScheduledTask } from "node-cron";
+import { type ScheduledTask, schedule } from "node-cron";
+import { AnalyticsQueryService } from "./lib/analytics-queries";
+import { HealthMonitor } from "./lib/health-monitor";
 import { bucketAnalyticsMigration } from "./migrations/bucketAnalyticsMigration";
 import { endpointGroupingMigration } from "./migrations/endpointGroupingMigration";
 import { logGroupingMigration } from "./migrations/logGroupingMigration";
 import { MigrationManager } from "./migrations/migrationManager";
-import type { SlackUserProvider, User, Emoji } from "./types/cache-entities";
 import type {
-	FullAnalyticsData,
-	EssentialStatsData,
 	ChartData,
+	EssentialStatsData,
+	FullAnalyticsData,
 } from "./types/analytics";
-import { AnalyticsQueryService } from "./lib/analytics-queries";
-import { HealthMonitor } from "./lib/health-monitor";
+import type { Emoji, SlackUserProvider, User } from "./types/cache-entities";
 
-// Re-export types for backward compatibility
-export type { SlackUserProvider, User, Emoji } from "./types/cache-entities";
 export type {
-	FullAnalyticsData,
-	EssentialStatsData,
 	ChartData,
-	UserAgentData,
-	EndpointMetrics,
-	StatusMetrics,
+	DashboardMetrics,
 	DayMetrics,
-	UserAgentMetrics,
-	LatencyPercentiles,
+	EndpointMetrics,
+	EssentialStatsData,
+	FullAnalyticsData,
+	LatencyAnalytics,
 	LatencyDistribution,
 	LatencyOverTimeMetrics,
-	LatencyAnalytics,
-	PerformanceMetrics,
+	LatencyPercentiles,
 	PeakTraffic,
-	DashboardMetrics,
+	PerformanceMetrics,
+	StatusMetrics,
 	TrafficOverview,
+	UserAgentData,
+	UserAgentMetrics,
 } from "./types/analytics";
+// Re-export types for backward compatibility
+export type { Emoji, SlackUserProvider, User } from "./types/cache-entities";
 
 const SECONDS_PER_10MIN = 600;
 const SECONDS_PER_DAY = 86400;
@@ -436,6 +436,11 @@ class Cache {
 				try {
 					console.log(`Background updating user: ${userId}`);
 					const slackUser = await this.slackWrapper.getUserInfo(userId);
+					if (!slackUser) {
+						console.warn(`Slack returned no user for ${userId}`);
+						this.userUpdateQueue.delete(userId);
+						continue;
+					}
 
 					await this.insertUser(
 						userId.toUpperCase(),

@@ -1,11 +1,11 @@
 import type { Database, Statement } from "bun:sqlite";
-import { AnalyticsCache } from "../types/analytics";
 import type {
-	FullAnalyticsData,
-	EssentialStatsData,
 	ChartData,
+	EssentialStatsData,
+	FullAnalyticsData,
 	UserAgentData,
 } from "../types/analytics";
+import { AnalyticsCache } from "../types/analytics";
 
 const SECONDS_PER_10MIN = 600;
 const SECONDS_PER_HOUR = 3600;

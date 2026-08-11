@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
-import type { Migration } from "./types";
 import { normalizeEndpoint } from "./normalizeEndpoint";
+import type { Migration } from "./types";
 
 /**
  * Migration to group request logs that aren't already grouped

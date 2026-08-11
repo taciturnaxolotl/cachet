@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { SlackCache } from "../cache";
 import { unlinkSync } from "node:fs";
+import { SlackCache } from "../cache";
 
 const TEST_DB_PATH = "/tmp/cachet-test.db";
 

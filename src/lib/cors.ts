@@ -19,15 +19,15 @@ const CORS_ENTRIES = Object.entries(CORS_HEADERS);
  */
 export function addCorsHeaders(response: Response): Response {
 	try {
-		for (let i = 0; i < CORS_ENTRIES.length; i++) {
-			response.headers.set(CORS_ENTRIES[i][0], CORS_ENTRIES[i][1]);
+		for (const [name, value] of CORS_ENTRIES) {
+			response.headers.set(name, value);
 		}
 		return response;
 	} catch {
 		// Headers are immutable (e.g. Response.json()), create new response
 		const headers = new Headers(response.headers);
-		for (let i = 0; i < CORS_ENTRIES.length; i++) {
-			headers.set(CORS_ENTRIES[i][0], CORS_ENTRIES[i][1]);
+		for (const [name, value] of CORS_ENTRIES) {
+			headers.set(name, value);
 		}
 		return new Response(response.body, {
 			status: response.status,

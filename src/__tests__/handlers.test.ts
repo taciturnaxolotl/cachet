@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from "bun:test";
-import { createHandlers } from "../handlers/index";
 import type { SlackCache } from "../cache";
+import { createHandlers } from "../handlers/index";
 
 function createMockCache(overrides: Partial<SlackCache> = {}): SlackCache {
 	return {
@@ -53,6 +53,11 @@ function createMockCache(overrides: Partial<SlackCache> = {}): SlackCache {
 
 const noopAnalytics = (_code: number) => {};
 
+/** Response.json() is unknown; tests state the shape they're asserting against */
+async function jsonBody<T>(response: Response): Promise<T> {
+	return (await response.json()) as T;
+}
+
 describe("handlers", () => {
 	describe("handleHealthCheck", () => {
 		it("returns healthy status", async () => {
@@ -60,7 +65,7 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/health");
 			const response = await handlers.handleHealthCheck(request, noopAnalytics);
-			const body = await response.json();
+			const body = await jsonBody<{ status: string; cache: boolean }>(response);
 
 			expect(response.status).toBe(200);
 			expect(body.status).toBe("healthy");
@@ -72,7 +77,9 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/health?detailed=true");
 			const response = await handlers.handleHealthCheck(request, noopAnalytics);
-			const body = await response.json();
+			const body = await jsonBody<{
+				checks: { database: { status: boolean } };
+			}>(response);
 
 			expect(response.status).toBe(200);
 			expect(body.checks).toBeDefined();
@@ -104,7 +111,7 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/users/U123");
 			const response = await handlers.handleGetUser(request, noopAnalytics);
-			const body = await response.json();
+			const body = await jsonBody<{ userId: string }>(response);
 
 			expect(response.status).toBe(200);
 			expect(body.userId).toBe("U123");
@@ -153,7 +160,7 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/emojis/sparkling_heart");
 			const response = await handlers.handleGetEmoji(request, noopAnalytics);
-			const body = await response.json();
+			const body = await jsonBody<{ name: string; imageUrl: string }>(response);
 
 			expect(response.status).toBe(200);
 			expect(body.name).toBe("sparkling_heart");
@@ -182,7 +189,7 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/emojis");
 			const response = await handlers.handleListEmojis(request, noopAnalytics);
-			const body = await response.json();
+			const body = await jsonBody<unknown>(response);
 
 			expect(response.status).toBe(200);
 			expect(Array.isArray(body)).toBe(true);
@@ -222,7 +229,7 @@ describe("handlers", () => {
 				request,
 				noopAnalytics,
 			);
-			const body = await response.json();
+			const body = await jsonBody<{ totalRequests: number }>(response);
 
 			expect(response.status).toBe(200);
 			expect(body.totalRequests).toBe(100);
@@ -248,7 +255,9 @@ describe("handlers", () => {
 				request,
 				noopAnalytics,
 			);
-			const body = await response.json();
+			const body = await jsonBody<{ userAgents: unknown; totalCount: number }>(
+				response,
+			);
 
 			expect(response.status).toBe(200);
 			expect(body.userAgents).toBeDefined();

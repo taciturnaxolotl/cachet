@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { selectBucketTable, groupEndpoint } from "../lib/analytics-queries";
+import { groupEndpoint, selectBucketTable } from "../lib/analytics-queries";
 
 describe("selectBucketTable", () => {
 	it("returns 10min table for <= 1 day", () => {

@@ -118,9 +118,11 @@ export class HealthMonitor {
 			)
 			.get(windowStart) as { total: number };
 
-		const currentSession = this.db
-			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
-			.get(this.currentSessionId) as { start_time: number } | null;
+		const currentSession = this.currentSessionId
+			? (this.db
+					.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
+					.get(this.currentSessionId) as { start_time: number } | null)
+			: null;
 
 		const currentDuration = currentSession
 			? now - Math.max(currentSession.start_time, windowStart)

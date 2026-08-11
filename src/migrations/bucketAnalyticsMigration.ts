@@ -153,7 +153,8 @@ export const bucketAnalyticsMigration: Migration = {
 				response_time: number | null;
 			}>;
 
-			if (batch.length === 0) break;
+			const lastRow = batch.at(-1);
+			if (!lastRow) break;
 
 			db.transaction(() => {
 				for (const row of batch) {
@@ -191,7 +192,7 @@ export const bucketAnalyticsMigration: Migration = {
 				}
 			})();
 
-			lastRowId = batch[batch.length - 1].rowid;
+			lastRowId = lastRow.rowid;
 			totalMigrated += batch.length;
 			console.log(`Migrated ${totalMigrated} records...`);
 

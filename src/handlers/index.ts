@@ -2,11 +2,11 @@
  * All route handler functions extracted for reuse
  */
 
+import { getEmojiUrl } from "../../utils/emojiHelper";
 import type { SlackCache } from "../cache";
 import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 import { lastSegment, pathSegment, queryParam } from "../lib/fast-url";
-import { getEmojiUrl } from "../../utils/emojiHelper";
 
 /**
  * Parse a string to a positive integer, returning a fallback if invalid

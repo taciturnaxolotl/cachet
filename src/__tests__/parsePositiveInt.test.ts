@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { parsePositiveInt as parseFromHandlers } from "../handlers/index";
 import { parsePositiveInt as parseFromConfig } from "../config";
+import { parsePositiveInt as parseFromHandlers } from "../handlers/index";
 
 describe("parsePositiveInt (handlers)", () => {
 	it("returns fallback for null", () => {
