@@ -1,15 +1,15 @@
 import { serve } from "bun";
-import { config } from "./config";
+import faviconFile from "../favicon.ico";
 import { getEmojiUrl } from "../utils/emojiHelper";
 import { SlackCache } from "./cache";
+import { config } from "./config";
 import dashboard from "./dashboard.html";
-import { swaggerGenerator } from "./lib/swagger-generator";
 import { addCorsHeaders, corsPreflightResponse } from "./lib/cors";
-import type { RouteDefinition } from "./types/routes";
+import { swaggerGenerator } from "./lib/swagger-generator";
 import { createApiRoutes } from "./routes/api-routes";
 import { SlackWrapper } from "./slackWrapper";
 import swagger from "./swagger.html";
-import faviconFile from "../favicon.ico";
+import type { RouteDefinition } from "./types/routes";
 
 // Initialize SlackWrapper and Cache
 const slackApp = new SlackWrapper({
@@ -97,7 +97,7 @@ const legacyRoutes = {
 		return addCorsHeaders(response);
 	},
 	"/favicon.ico": async (_: Request) => {
-		const response = new Response(faviconFile);
+		const response = new Response(Bun.file(faviconFile));
 		return addCorsHeaders(response);
 	},
 
