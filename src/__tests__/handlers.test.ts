@@ -147,6 +147,33 @@ describe("handlers", () => {
 
 			expect(response.status).toBe(404);
 		});
+
+		it("returns native emoji when not cached", async () => {
+			const cache = createMockCache();
+			const handlers = createHandlers(cache);
+			const request = new Request("http://localhost/emojis/sparkling_heart");
+			const response = await handlers.handleGetEmoji(request, noopAnalytics);
+			const body = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(body.name).toBe("sparkling_heart");
+			expect(body.imageUrl).toContain("/1f496.png");
+		});
+	});
+
+	describe("handleEmojiRedirect", () => {
+		it("redirects to native emoji when not cached", async () => {
+			const cache = createMockCache();
+			const handlers = createHandlers(cache);
+			const request = new Request("http://localhost/emojis/bangbang/r");
+			const response = await handlers.handleEmojiRedirect(
+				request,
+				noopAnalytics,
+			);
+
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain("/203c-fe0f.png");
+		});
 	});
 
 	describe("handleListEmojis", () => {

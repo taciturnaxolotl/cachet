@@ -43,14 +43,18 @@ class EmojiMap {
 
 const emojiMap = new EmojiMap(emojilib);
 
+/** Slack bumps this when it ships a new emoji asset set */
+const ASSET_VERSION = "16.0";
+const ASSET_STYLE = "google-xlarge";
+
 /**
  * Gets the Slack CDN URL for an emoji
  * @param keyword The emoji name/shortcode
  * @returns The CDN URL, or null if emoji not found
  */
 export function getEmojiUrl(keyword: string): string | null {
-	const codepoint = emojiMap.getCodepoint(keyword);
+	const codepoint = emojiMap.getCodepoint(keyword.toLowerCase());
 	if (!codepoint) return null;
 
-	return `https://a.slack-edge.com/production-standard-emoji-assets/14.0/google-medium/${codepoint.toLowerCase()}.png`;
+	return `https://a.slack-edge.com/production-standard-emoji-assets/${ASSET_VERSION}/${ASSET_STYLE}/${codepoint.toLowerCase()}.png`;
 }
