@@ -22,11 +22,13 @@ const slackApp = new SlackWrapper({
 const cache = new SlackCache(config.databasePath, 25, async () => {
 	console.log("Fetching emojis from Slack");
 	const emojis = await slackApp.getEmojiList();
+	// A Map keeps aliases named `constructor` from resolving off Object.prototype
+	const emojisByName = new Map(Object.entries(emojis));
 	const emojiEntries = Object.entries(emojis)
 		.map(([name, url]) => {
 			if (typeof url === "string" && url.startsWith("alias:")) {
 				const aliasName = url.substring(6);
-				const aliasUrl = emojis[aliasName] ?? getEmojiUrl(aliasName);
+				const aliasUrl = emojisByName.get(aliasName) ?? getEmojiUrl(aliasName);
 
 				if (!aliasUrl) {
 					console.warn(`Could not find alias for ${aliasName}`);
