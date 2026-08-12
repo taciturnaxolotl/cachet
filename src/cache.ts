@@ -40,8 +40,8 @@ const MS_PER_HOUR = 3600000;
 const USER_DEFAULT_TTL_HOURS = 7 * 24;
 const USER_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const TOUCH_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
-const QUEUE_BATCH_SIZE = 3;
-const QUEUE_INTERVAL_MS = 30 * 1000;
+const QUEUE_BATCH_SIZE = 10;
+const QUEUE_INTERVAL_MS = 5 * 1000;
 const LRU_MAX_SIZE = 2000;
 const LRU_TTL_MS = 60_000;
 
@@ -426,20 +426,22 @@ class Cache {
 
 		this.isProcessingQueue = true;
 
+		const slack = this.slackWrapper;
+		if (!slack) return;
+
 		try {
 			const usersToUpdate = Array.from(this.userUpdateQueue).slice(
 				0,
 				QUEUE_BATCH_SIZE,
 			);
 
-			for (const userId of usersToUpdate) {
-				try {
+			const results = await Promise.allSettled(
+				usersToUpdate.map(async (userId) => {
 					console.log(`Background updating user: ${userId}`);
-					const slackUser = await this.slackWrapper.getUserInfo(userId);
+					const slackUser = await slack.getUserInfo(userId);
 					if (!slackUser) {
 						console.warn(`Slack returned no user for ${userId}`);
-						this.userUpdateQueue.delete(userId);
-						continue;
+						return userId;
 					}
 
 					await this.insertUser(
@@ -449,10 +451,15 @@ class Cache {
 						slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
 					);
 
-					this.userUpdateQueue.delete(userId);
-				} catch (error) {
-					console.warn(`Failed to update user ${userId}:`, error);
-					this.userUpdateQueue.delete(userId);
+					return userId;
+				}),
+			);
+
+			for (const result of results) {
+				if (result.status === "fulfilled") {
+					this.userUpdateQueue.delete(result.value);
+				} else {
+					console.warn("Failed to update user:", result.reason);
 				}
 			}
 		} catch (error) {
