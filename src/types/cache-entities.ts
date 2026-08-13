@@ -23,6 +23,7 @@ export interface CacheItem {
 export interface User extends CacheItem {
 	type: "user";
 	displayName: string;
+	realName: string;
 	pronouns: string;
 	userId: string;
 }

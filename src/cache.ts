@@ -131,11 +131,19 @@ class Cache {
         id TEXT PRIMARY KEY,
         userId TEXT UNIQUE,
         displayName TEXT,
+        realName TEXT,
         pronouns TEXT,
         imageUrl TEXT,
         expiration INTEGER
       )
     `);
+
+		// Add realName column to existing databases
+		try {
+			this.db.run("ALTER TABLE users ADD COLUMN realName TEXT");
+		} catch {
+			// Column already exists
+		}
 
 		this.db.run(`
       CREATE TABLE IF NOT EXISTS emojis (
@@ -469,9 +477,13 @@ class Cache {
 						return userId;
 					}
 
+					const displayName = slackUser.profile?.display_name || slackUser.real_name || slackUser.name || "";
+					const realName = slackUser.real_name || slackUser.profile?.display_name || "";
+
 					await this.insertUser(
 						userId.toUpperCase(),
-						slackUser.real_name || slackUser.name || "Unknown",
+						displayName,
+						realName,
 						slackUser.profile?.pronouns || "",
 						slackUser.profile?.image_512 || slackUser.profile?.image_192 || "",
 					);
@@ -512,6 +524,7 @@ class Cache {
 	async insertUser(
 		userId: string,
 		displayName: string,
+		realName: string,
 		pronouns: string,
 		imageUrl: string,
 		expirationHours?: number,
@@ -523,17 +536,21 @@ class Cache {
 
 		try {
 			this.db.run(
-				`INSERT INTO users (id, userId, displayName, pronouns, imageUrl, expiration)
-           VALUES (?, ?, ?, ?, ?, ?)
+				`INSERT INTO users (id, userId, displayName, realName, pronouns, imageUrl, expiration)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(userId)
-           DO UPDATE SET imageUrl = ?, expiration = ?`,
+           DO UPDATE SET displayName = ?, realName = ?, pronouns = ?, imageUrl = ?, expiration = ?`,
 				[
 					id,
 					userId.toUpperCase(),
 					displayName,
+					realName,
 					pronouns,
 					imageUrl,
 					expiration,
+					displayName,
+					realName,
+					pronouns,
 					imageUrl,
 					expiration,
 				],
@@ -665,6 +682,7 @@ class Cache {
 			id: result.id,
 			userId: result.userId,
 			displayName: result.displayName,
+			realName: result.realName || "",
 			pronouns: result.pronouns,
 			imageUrl: result.imageUrl,
 			expiration: new Date(result.expiration),

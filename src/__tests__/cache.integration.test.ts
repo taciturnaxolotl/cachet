@@ -26,6 +26,7 @@ describe("SlackCache integration", () => {
 			const ok = await cache.insertUser(
 				"U123",
 				"Test User",
+				"Test Real Name",
 				"he/him",
 				"https://example.com/avatar.png",
 			);
@@ -45,6 +46,7 @@ describe("SlackCache integration", () => {
 				"u456",
 				"Lower",
 				"",
+				"",
 				"https://example.com/lower.png",
 			);
 			const user = await cache.getUser("u456");
@@ -52,18 +54,20 @@ describe("SlackCache integration", () => {
 			expect(user?.userId).toBe("U456");
 		});
 
-		it("updates imageUrl on conflict (displayName/pronouns preserved from first insert)", async () => {
-			await cache.insertUser("U789", "Old Name", "", "https://old.com/img.png");
+		it("updates all fields on conflict", async () => {
+			await cache.insertUser("U789", "Old Display", "Old Real", "", "https://old.com/img.png");
 			await cache.insertUser(
 				"U789",
-				"New Name",
+				"New Display",
+				"New Real",
 				"she/her",
 				"https://new.com/img.png",
 			);
 
 			const user = await cache.getUser("U789");
-			// ON CONFLICT only updates imageUrl and expiration, not displayName/pronouns
-			expect(user?.displayName).toBe("Old Name");
+			expect(user?.displayName).toBe("New Display");
+			expect(user?.realName).toBe("New Real");
+			expect(user?.pronouns).toBe("she/her");
 			expect(user?.imageUrl).toBe("https://new.com/img.png");
 		});
 
@@ -76,6 +80,7 @@ describe("SlackCache integration", () => {
 			await cache.insertUser(
 				"UPURGE",
 				"Purge Me",
+				"",
 				"",
 				"https://example.com/p.png",
 			);
@@ -146,7 +151,7 @@ describe("SlackCache integration", () => {
 
 	describe("purgeAll", () => {
 		it("purges all users and emojis", async () => {
-			await cache.insertUser("UALL1", "User1", "", "https://example.com/1.png");
+			await cache.insertUser("UALL1", "User1", "", "", "https://example.com/1.png");
 			await cache.insertEmoji("eall1", null, "https://emoji.com/1.png");
 
 			const result = await cache.purgeAll();

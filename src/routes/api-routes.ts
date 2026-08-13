@@ -136,7 +136,8 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 							properties: {
 								id: { type: "string", example: "U062UG485EE" },
 								userId: { type: "string", example: "U062UG485EE" },
-								displayName: { type: "string", example: "Kieran Klukas" },
+								displayName: { type: "string", example: "krn" },
+								realName: { type: "string", example: "Kieran Klukas" },
 								pronouns: { type: "string", example: "he/him" },
 								imageUrl: {
 									type: "string",
@@ -153,6 +154,7 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 									id: { type: "string", example: "U062UG485EE" },
 									userId: { type: "string", example: "U062UG485EE" },
 									displayName: { type: "string", example: "Unknown" },
+									realName: { type: "string", example: "" },
 									pronouns: { type: "string", example: "" },
 									imageUrl: {
 										type: "string",
