@@ -57,7 +57,9 @@ class Cache {
 	private onEmojiExpired?: () => void;
 
 	// Background user update queue to avoid Slack API limits
-	private userUpdateQueue: Set<string> = new Set();
+	// Priority queue: newUserQueue (misses) processed before refreshQueue (touch-refreshes)
+	private newUserQueue: Set<string> = new Set();
+	private refreshQueue: Set<string> = new Set();
 	private isProcessingQueue = false;
 	private slackWrapper?: SlackUserProvider;
 
@@ -65,7 +67,6 @@ class Cache {
 	// 1.0 = keeping up, >1.0 = falling behind, <1.0 = catching up
 	private queuePressure = 1.0;
 	private tickIngress = 0;
-	private tickDrain = 0;
 
 	// Composed services
 	private analytics: AnalyticsQueryService;
@@ -98,7 +99,7 @@ class Cache {
 		this.analytics = new AnalyticsQueryService(this.db);
 		this.healthMonitor = new HealthMonitor(
 			this.db,
-			() => this.userUpdateQueue.size,
+			() => ({ newUser: this.newUserQueue.size, refresh: this.refreshQueue.size }),
 		);
 
 		this.initPreparedStatements();
@@ -141,8 +142,10 @@ class Cache {
 		// Add realName column to existing databases
 		try {
 			this.db.run("ALTER TABLE users ADD COLUMN realName TEXT");
-		} catch {
-			// Column already exists
+		} catch (e) {
+			if (!(e instanceof Error && e.message.includes("duplicate column"))) {
+				console.error("Failed to add realName column:", e);
+			}
 		}
 
 		this.db.run(`
@@ -421,12 +424,14 @@ class Cache {
 		return TOUCH_REFRESH_MIN_MS + ratio * (TOUCH_REFRESH_MAX_MS - TOUCH_REFRESH_MIN_MS);
 	}
 
-	queueUserUpdate(userId: string) {
+	queueUserUpdate(userId: string, priority: "new" | "refresh" = "new") {
 		const normalizedId = userId.toUpperCase();
-		if (!this.userUpdateQueue.has(normalizedId)) {
+		const alreadyQueued = this.newUserQueue.has(normalizedId) || this.refreshQueue.has(normalizedId);
+		if (!alreadyQueued) {
 			this.tickIngress++;
 		}
-		this.userUpdateQueue.add(normalizedId);
+		const targetQueue = priority === "new" ? this.newUserQueue : this.refreshQueue;
+		targetQueue.add(normalizedId);
 	}
 
 	private startQueueProcessor() {
@@ -449,9 +454,10 @@ class Cache {
 	}
 
 	private async processUserUpdateQueue() {
+		const totalSize = this.newUserQueue.size + this.refreshQueue.size;
 		if (
 			this.isProcessingQueue ||
-			this.userUpdateQueue.size === 0 ||
+			totalSize === 0 ||
 			!this.slackWrapper
 		) {
 			return;
@@ -463,13 +469,34 @@ class Cache {
 		if (!slack) return;
 
 		try {
-			const usersToUpdate = Array.from(this.userUpdateQueue).slice(
-				0,
-				QUEUE_BATCH_SIZE,
-			);
+			// Snapshot and reset ingress/drain counters at tick start
+			// to avoid accumulating across skipped ticks
+			const tickIngress = this.tickIngress;
+			this.tickIngress = 0;
+
+			// Interleave: 2 new users for every 1 refresh, preferring new users
+			const newUsers = Array.from(this.newUserQueue);
+			const refreshUsers = Array.from(this.refreshQueue);
+			const batch: string[] = [];
+			let ni = 0;
+			let ri = 0;
+
+			while (batch.length < QUEUE_BATCH_SIZE && (ni < newUsers.length || ri < refreshUsers.length)) {
+				const pickNew = ri >= refreshUsers.length || (ni < newUsers.length && batch.length % 3 !== 2);
+				if (pickNew && ni < newUsers.length) {
+					const user = newUsers[ni];
+					if (user) { batch.push(user); ni++; }
+				} else if (ri < refreshUsers.length) {
+					const user = refreshUsers[ri];
+					if (user) { batch.push(user); ri++; }
+				} else if (ni < newUsers.length) {
+					const user = newUsers[ni];
+					if (user) { batch.push(user); ni++; }
+				}
+			}
 
 			const results = await Promise.allSettled(
-				usersToUpdate.map(async (userId) => {
+				batch.map(async (userId) => {
 					console.log(`Background updating user: ${userId}`);
 					const slackUser = await slack.getUserInfo(userId);
 					if (!slackUser) {
@@ -492,26 +519,24 @@ class Cache {
 				}),
 			);
 
+			// Update pressure EMA using this tick's counters
 			let drained = 0;
 			for (const result of results) {
 				if (result.status === "fulfilled") {
-					this.userUpdateQueue.delete(result.value);
+					this.newUserQueue.delete(result.value);
+					this.refreshQueue.delete(result.value);
 					drained++;
 				} else {
 					console.warn("Failed to update user:", result.reason);
 				}
 			}
 
-			// Update pressure EMA at end of each tick
-			this.tickDrain += drained;
-			if (this.tickDrain > 0) {
-				const rawRatio = this.tickIngress / this.tickDrain;
+			if (drained > 0) {
+				const rawRatio = tickIngress / drained;
 				this.queuePressure =
 					PRESSURE_EMA_ALPHA * rawRatio +
 					(1 - PRESSURE_EMA_ALPHA) * this.queuePressure;
 			}
-			this.tickIngress = 0;
-			this.tickDrain = 0;
 		} catch (error) {
 			console.error("Error processing user update queue:", error);
 		} finally {
@@ -671,7 +696,7 @@ class Cache {
 		if (userAge < thresholdAgo) {
 			const newExpiration = now + USER_CLEANUP_AGE_MS;
 			this.flushTouchRefresh(newExpiration, normalizedId);
-			this.queueUserUpdate(normalizedId);
+			this.queueUserUpdate(normalizedId, "refresh");
 			console.log(
 				`Touch-refresh: Extended TTL for user ${normalizedId} and queued for update`,
 			);

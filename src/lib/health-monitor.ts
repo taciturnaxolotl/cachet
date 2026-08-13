@@ -8,7 +8,7 @@ export class HealthMonitor {
 	private db: Database;
 	private currentSessionId?: number;
 	private slackWrapper?: SlackUserProvider;
-	private userUpdateQueueSize: () => number;
+	private queueSizes: () => { newUser: number; refresh: number };
 
 	// Cached Slack API health check result (60 second TTL)
 	private slackHealthCache: {
@@ -25,9 +25,9 @@ export class HealthMonitor {
 	} | null = null;
 	private detailedHealthCacheTTL = 5000;
 
-	constructor(db: Database, userUpdateQueueSize: () => number) {
+	constructor(db: Database, queueSizes: () => { newUser: number; refresh: number }) {
 		this.db = db;
-		this.userUpdateQueueSize = userUpdateQueueSize;
+		this.queueSizes = queueSizes;
 	}
 
 	setSlackWrapper(slackWrapper: SlackUserProvider) {
@@ -156,10 +156,12 @@ export class HealthMonitor {
 		) {
 			return this.detailedHealthCache.response;
 		}
+		const queues = this.queueSizes();
 		const checks: DetailedHealthResponse["checks"] = {
 			database: { status: false, latency: 0 },
 			slackApi: { status: false },
-			queueDepth: this.userUpdateQueueSize(),
+			queueDepth: queues.newUser + queues.refresh,
+			queueDetail: { newUser: queues.newUser, refresh: queues.refresh },
 			memoryUsage: {
 				heapUsed: 0,
 				heapTotal: 0,
@@ -236,7 +238,7 @@ export class HealthMonitor {
 		let status: "healthy" | "degraded" | "unhealthy" = "healthy";
 		if (!checks.database.status) {
 			status = "unhealthy";
-		} else if (!checks.slackApi.status || checks.queueDepth > 100) {
+		} else if (!checks.slackApi.status || checks.queueDetail.newUser > 100) {
 			status = "degraded";
 		} else if (checks.memoryUsage.percentage >= 120) {
 			status = "degraded";
@@ -263,6 +265,7 @@ export interface DetailedHealthResponse {
 		database: { status: boolean; latency?: number };
 		slackApi: { status: boolean; error?: string };
 		queueDepth: number;
+		queueDetail: { newUser: number; refresh: number };
 		memoryUsage: {
 			heapUsed: number;
 			heapTotal: number;
