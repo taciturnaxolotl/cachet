@@ -39,7 +39,9 @@ const SECONDS_PER_DAY = 86400;
 const MS_PER_HOUR = 3600000;
 const USER_DEFAULT_TTL_HOURS = 7 * 24;
 const USER_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const TOUCH_REFRESH_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+const TOUCH_REFRESH_MIN_MS = 2 * 60 * 60 * 1000; // 2 hours
+const TOUCH_REFRESH_MAX_MS = 24 * 60 * 60 * 1000; // 24 hours
+const PRESSURE_EMA_ALPHA = 0.3; // smoothing factor: lower = slower to react
 const QUEUE_BATCH_SIZE = 10;
 const QUEUE_INTERVAL_MS = 5 * 1000;
 const LRU_MAX_SIZE = 2000;
@@ -58,6 +60,12 @@ class Cache {
 	private userUpdateQueue: Set<string> = new Set();
 	private isProcessingQueue = false;
 	private slackWrapper?: SlackUserProvider;
+
+	// Queue pressure tracking: EMA of (ingress / drain) per tick
+	// 1.0 = keeping up, >1.0 = falling behind, <1.0 = catching up
+	private queuePressure = 1.0;
+	private tickIngress = 0;
+	private tickDrain = 0;
 
 	// Composed services
 	private analytics: AnalyticsQueryService;
@@ -392,8 +400,25 @@ class Cache {
 
 	// --- User update queue ---
 
+	/**
+	 * Computes a dynamic touch-refresh threshold based on queue pressure.
+	 * Pressure ~1.0 (keeping up) → 2h threshold for fast pfp updates.
+	 * Pressure >1.5 (falling behind) → scales toward 24h.
+	 * Uses EMA-smoothed ingress/drain ratio to avoid flapping.
+	 */
+	private getTouchRefreshThreshold(): number {
+		if (this.queuePressure <= 1.0) return TOUCH_REFRESH_MIN_MS;
+		if (this.queuePressure >= 2.0) return TOUCH_REFRESH_MAX_MS;
+		const ratio = (this.queuePressure - 1.0); // 0..1 over the 1.0..2.0 range
+		return TOUCH_REFRESH_MIN_MS + ratio * (TOUCH_REFRESH_MAX_MS - TOUCH_REFRESH_MIN_MS);
+	}
+
 	queueUserUpdate(userId: string) {
-		this.userUpdateQueue.add(userId.toUpperCase());
+		const normalizedId = userId.toUpperCase();
+		if (!this.userUpdateQueue.has(normalizedId)) {
+			this.tickIngress++;
+		}
+		this.userUpdateQueue.add(normalizedId);
 	}
 
 	private startQueueProcessor() {
@@ -455,13 +480,26 @@ class Cache {
 				}),
 			);
 
+			let drained = 0;
 			for (const result of results) {
 				if (result.status === "fulfilled") {
 					this.userUpdateQueue.delete(result.value);
+					drained++;
 				} else {
 					console.warn("Failed to update user:", result.reason);
 				}
 			}
+
+			// Update pressure EMA at end of each tick
+			this.tickDrain += drained;
+			if (this.tickDrain > 0) {
+				const rawRatio = this.tickIngress / this.tickDrain;
+				this.queuePressure =
+					PRESSURE_EMA_ALPHA * rawRatio +
+					(1 - PRESSURE_EMA_ALPHA) * this.queuePressure;
+			}
+			this.tickIngress = 0;
+			this.tickDrain = 0;
 		} catch (error) {
 			console.error("Error processing user update queue:", error);
 		} finally {
@@ -609,10 +647,11 @@ class Cache {
 			return null;
 		}
 
-		const twentyFourHoursAgo = now - TOUCH_REFRESH_THRESHOLD_MS;
+		const threshold = this.getTouchRefreshThreshold();
+		const thresholdAgo = now - threshold;
 		const userAge = expiration - USER_CLEANUP_AGE_MS;
 
-		if (userAge < twentyFourHoursAgo) {
+		if (userAge < thresholdAgo) {
 			const newExpiration = now + USER_CLEANUP_AGE_MS;
 			this.flushTouchRefresh(newExpiration, normalizedId);
 			this.queueUserUpdate(normalizedId);
