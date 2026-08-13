@@ -97,10 +97,10 @@ class Cache {
 		this.initDatabase();
 
 		this.analytics = new AnalyticsQueryService(this.db);
-		this.healthMonitor = new HealthMonitor(
-			this.db,
-			() => ({ newUser: this.newUserQueue.size, refresh: this.refreshQueue.size }),
-		);
+		this.healthMonitor = new HealthMonitor(this.db, () => ({
+			newUser: this.newUserQueue.size,
+			refresh: this.refreshQueue.size,
+		}));
 
 		this.initPreparedStatements();
 		this.healthMonitor.startUptimeSession();
@@ -420,17 +420,23 @@ class Cache {
 	private getTouchRefreshThreshold(): number {
 		if (this.queuePressure <= 1.0) return TOUCH_REFRESH_MIN_MS;
 		if (this.queuePressure >= 2.0) return TOUCH_REFRESH_MAX_MS;
-		const ratio = (this.queuePressure - 1.0); // 0..1 over the 1.0..2.0 range
-		return TOUCH_REFRESH_MIN_MS + ratio * (TOUCH_REFRESH_MAX_MS - TOUCH_REFRESH_MIN_MS);
+		const ratio = this.queuePressure - 1.0; // 0..1 over the 1.0..2.0 range
+		return (
+			TOUCH_REFRESH_MIN_MS +
+			ratio * (TOUCH_REFRESH_MAX_MS - TOUCH_REFRESH_MIN_MS)
+		);
 	}
 
 	queueUserUpdate(userId: string, priority: "new" | "refresh" = "new") {
 		const normalizedId = userId.toUpperCase();
-		const alreadyQueued = this.newUserQueue.has(normalizedId) || this.refreshQueue.has(normalizedId);
+		const alreadyQueued =
+			this.newUserQueue.has(normalizedId) ||
+			this.refreshQueue.has(normalizedId);
 		if (!alreadyQueued) {
 			this.tickIngress++;
 		}
-		const targetQueue = priority === "new" ? this.newUserQueue : this.refreshQueue;
+		const targetQueue =
+			priority === "new" ? this.newUserQueue : this.refreshQueue;
 		targetQueue.add(normalizedId);
 	}
 
@@ -455,11 +461,7 @@ class Cache {
 
 	private async processUserUpdateQueue() {
 		const totalSize = this.newUserQueue.size + this.refreshQueue.size;
-		if (
-			this.isProcessingQueue ||
-			totalSize === 0 ||
-			!this.slackWrapper
-		) {
+		if (this.isProcessingQueue || totalSize === 0 || !this.slackWrapper) {
 			return;
 		}
 
@@ -481,17 +483,31 @@ class Cache {
 			let ni = 0;
 			let ri = 0;
 
-			while (batch.length < QUEUE_BATCH_SIZE && (ni < newUsers.length || ri < refreshUsers.length)) {
-				const pickNew = ri >= refreshUsers.length || (ni < newUsers.length && batch.length % 3 !== 2);
+			while (
+				batch.length < QUEUE_BATCH_SIZE &&
+				(ni < newUsers.length || ri < refreshUsers.length)
+			) {
+				const pickNew =
+					ri >= refreshUsers.length ||
+					(ni < newUsers.length && batch.length % 3 !== 2);
 				if (pickNew && ni < newUsers.length) {
 					const user = newUsers[ni];
-					if (user) { batch.push(user); ni++; }
+					if (user) {
+						batch.push(user);
+						ni++;
+					}
 				} else if (ri < refreshUsers.length) {
 					const user = refreshUsers[ri];
-					if (user) { batch.push(user); ri++; }
+					if (user) {
+						batch.push(user);
+						ri++;
+					}
 				} else if (ni < newUsers.length) {
 					const user = newUsers[ni];
-					if (user) { batch.push(user); ni++; }
+					if (user) {
+						batch.push(user);
+						ni++;
+					}
 				}
 			}
 
@@ -504,8 +520,13 @@ class Cache {
 						return userId;
 					}
 
-					const displayName = slackUser.profile?.display_name || slackUser.real_name || slackUser.name || "";
-					const realName = slackUser.real_name || slackUser.profile?.display_name || "";
+					const displayName =
+						slackUser.profile?.display_name ||
+						slackUser.real_name ||
+						slackUser.name ||
+						"";
+					const realName =
+						slackUser.real_name || slackUser.profile?.display_name || "";
 
 					await this.insertUser(
 						userId.toUpperCase(),

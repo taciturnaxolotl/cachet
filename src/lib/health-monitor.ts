@@ -25,7 +25,10 @@ export class HealthMonitor {
 	} | null = null;
 	private detailedHealthCacheTTL = 5000;
 
-	constructor(db: Database, queueSizes: () => { newUser: number; refresh: number }) {
+	constructor(
+		db: Database,
+		queueSizes: () => { newUser: number; refresh: number },
+	) {
 		this.db = db;
 		this.queueSizes = queueSizes;
 	}

@@ -100,7 +100,7 @@ export function createHandlers(cache: SlackCache) {
 					id: userId.toUpperCase(),
 					userId: userId.toUpperCase(),
 					displayName: "Unknown",
-				realName: "",
+					realName: "",
 					pronouns: "",
 					imageUrl: "https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
 				},

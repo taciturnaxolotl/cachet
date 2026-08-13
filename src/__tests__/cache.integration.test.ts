@@ -55,7 +55,13 @@ describe("SlackCache integration", () => {
 		});
 
 		it("updates all fields on conflict", async () => {
-			await cache.insertUser("U789", "Old Display", "Old Real", "", "https://old.com/img.png");
+			await cache.insertUser(
+				"U789",
+				"Old Display",
+				"Old Real",
+				"",
+				"https://old.com/img.png",
+			);
 			await cache.insertUser(
 				"U789",
 				"New Display",
@@ -151,7 +157,13 @@ describe("SlackCache integration", () => {
 
 	describe("purgeAll", () => {
 		it("purges all users and emojis", async () => {
-			await cache.insertUser("UALL1", "User1", "", "", "https://example.com/1.png");
+			await cache.insertUser(
+				"UALL1",
+				"User1",
+				"",
+				"",
+				"https://example.com/1.png",
+			);
 			await cache.insertEmoji("eall1", null, "https://emoji.com/1.png");
 
 			const result = await cache.purgeAll();
