@@ -164,6 +164,22 @@ export function createHandlers(cache: SlackCache) {
 		return Response.json(emojis);
 	};
 
+	const handlePurgeEmojis: RouteHandlerWithAnalytics = async (
+		request,
+		recordAnalytics,
+	) => {
+		const authError = requireAuth(request, recordAnalytics);
+		if (authError) return authError;
+
+		const count = await cache.purgeEmojis();
+
+		recordAnalytics(200);
+		return Response.json({
+			message: "Emojis purged",
+			emojis: count,
+		});
+	};
+
 	const handleGetEmoji: RouteHandlerWithAnalytics = async (
 		request,
 		recordAnalytics,
@@ -331,6 +347,7 @@ export function createHandlers(cache: SlackCache) {
 		handleListEmojis,
 		handleGetEmoji,
 		handleEmojiRedirect,
+		handlePurgeEmojis,
 		handleResetCache,
 		handleGetEssentialStats,
 		handleGetChartData,

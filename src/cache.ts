@@ -360,6 +360,20 @@ class Cache {
 		}
 	}
 
+	async purgeEmojis(): Promise<number> {
+		try {
+			const result = this.db.run("DELETE FROM emojis");
+			this.emojiCache.clear();
+			if (this.onEmojiExpired && result.changes > 0) {
+				this.onEmojiExpired();
+			}
+			return result.changes;
+		} catch (error) {
+			console.error("Error purging emojis:", error);
+			return 0;
+		}
+	}
+
 	async purgeAll(): Promise<{
 		message: string;
 		users: number;

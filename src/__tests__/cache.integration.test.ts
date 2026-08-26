@@ -153,6 +153,17 @@ describe("SlackCache integration", () => {
 			const emoji = await cache.getEmoji("nonexistent");
 			expect(emoji).toBeNull();
 		});
+
+		it("purges all emojis", async () => {
+			await cache.insertEmoji("purge1", null, "https://emoji.com/p1.png");
+			await cache.insertEmoji("purge2", null, "https://emoji.com/p2.png");
+
+			const count = await cache.purgeEmojis();
+			expect(count).toBeGreaterThanOrEqual(2);
+
+			const emoji = await cache.getEmoji("purge1");
+			expect(emoji).toBeNull();
+		});
 	});
 
 	describe("purgeAll", () => {

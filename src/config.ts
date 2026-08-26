@@ -54,7 +54,7 @@ function loadConfig(): AppConfig {
 	const bearerToken = process.env.BEARER_TOKEN || null;
 	if (!bearerToken) {
 		console.warn(
-			"BEARER_TOKEN is not set. Admin endpoints (/reset, /users/:id/purge) will return 500.",
+			"BEARER_TOKEN is not set. Admin endpoints (/reset, /users/:id/purge, /emojis/purge) will return 500.",
 		);
 	}
 

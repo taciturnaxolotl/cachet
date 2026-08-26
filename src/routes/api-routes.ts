@@ -310,6 +310,29 @@ export function createApiRoutes(cache: SlackCache, _slackApp: SlackWrapper) {
 			),
 		},
 
+		"/emojis/purge": {
+			POST: createRoute(
+				withAnalytics("/emojis/purge", "POST", handlers.handlePurgeEmojis),
+				{
+					summary: "Purge emoji cache",
+					description:
+						"Remove all emojis from the cache and trigger a re-fetch from Slack (requires authentication)",
+					tags: ["Emojis", "Admin"],
+					requiresAuth: true,
+					responses: Object.fromEntries([
+						apiResponse(200, "Emojis purged successfully", {
+							type: "object",
+							properties: {
+								message: { type: "string", example: "Emojis purged" },
+								emojis: { type: "number", example: 1337 },
+							},
+						}),
+						apiResponse(401, "Unauthorized"),
+					]),
+				},
+			),
+		},
+
 		"/reset": {
 			POST: createRoute(
 				withAnalytics("/reset", "POST", handlers.handleResetCache),

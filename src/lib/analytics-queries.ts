@@ -40,6 +40,12 @@ export function groupEndpoint(endpoint: string): string {
 	} else if (endpoint === "/emojis") {
 		return "Emoji List";
 	} else if (
+		endpoint.match(/^\/users\/[^/]+\/purge$/) ||
+		endpoint === "/emojis/purge" ||
+		endpoint === "/reset"
+	) {
+		return "Cache Management";
+	} else if (
 		endpoint.match(/^\/emojis\/[^/]+$/) ||
 		endpoint === "/emojis/EMOJI_NAME"
 	) {
@@ -59,11 +65,6 @@ export function groupEndpoint(endpoint: string): string {
 		endpoint === "/users/USER_ID/r"
 	) {
 		return "User Redirects";
-	} else if (
-		endpoint.match(/^\/users\/[^/]+\/purge$/) ||
-		endpoint === "/reset"
-	) {
-		return "Cache Management";
 	} else if (endpoint.includes("/users/") && endpoint.includes("/r")) {
 		return "User Redirects";
 	} else if (endpoint.includes("/users/")) {

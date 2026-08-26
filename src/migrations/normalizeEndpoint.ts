@@ -21,6 +21,8 @@ export function normalizeEndpoint(endpoint: string): string {
 	// Apply grouping rules (order matters: specific patterns before general)
 	if (path.match(/^\/users\/[^/]+\/purge$/) || path === "/reset") {
 		return "/reset";
+	} else if (path === "/emojis/purge") {
+		return "/emojis/purge";
 	} else if (path.match(/^\/users\/[^/]+\/r$/)) {
 		return "/users/USER_ID/r";
 	} else if (path.match(/^\/users\/[^/]+$/)) {

@@ -62,7 +62,7 @@ The api is pretty simple. You can get a profile picture by calling `GET /users/:
 
 On cache miss, `GET /users/:id` returns `202 Accepted` with a placeholder image URL and queues a background fetch. Retry after a few seconds to get the real profile data.
 
-Additionally, you can manually purge a specific user's cache with `POST /users/:user/purge` (requires authentication with a bearer token).
+Additionally, you can manually purge a specific user's cache with `POST /users/:user/purge` or purge all cached emojis with `POST /emojis/purge` (both require authentication with a bearer token).
 
 The analytics dashboard at `/` shows request counts and latency over time with configurable time ranges. I split the analytics into separate API endpoints (`/api/stats/essential`, `/api/stats/charts`, `/api/stats/useragents`) so the basic stats load immediately while the heavy chart queries run in the background.
 

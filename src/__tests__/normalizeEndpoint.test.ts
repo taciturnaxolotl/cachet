@@ -16,6 +16,10 @@ describe("normalizeEndpoint", () => {
 		expect(normalizeEndpoint("/reset")).toBe("/reset");
 	});
 
+	it("normalizes emoji purge endpoint", () => {
+		expect(normalizeEndpoint("/emojis/purge")).toBe("/emojis/purge");
+	});
+
 	it("normalizes emoji data endpoints", () => {
 		expect(normalizeEndpoint("/emojis/hackshark")).toBe("/emojis/EMOJI_NAME");
 	});

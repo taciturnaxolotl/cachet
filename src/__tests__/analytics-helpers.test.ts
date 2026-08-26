@@ -68,6 +68,7 @@ describe("groupEndpoint", () => {
 
 	it("groups cache management", () => {
 		expect(groupEndpoint("/users/U062UG485EE/purge")).toBe("Cache Management");
+		expect(groupEndpoint("/emojis/purge")).toBe("Cache Management");
 		expect(groupEndpoint("/reset")).toBe("Cache Management");
 	});
 

@@ -11,6 +11,7 @@ function createMockCache(overrides: Partial<SlackCache> = {}): SlackCache {
 		insertEmoji: mock(async () => true),
 		batchInsertEmojis: mock(async () => true),
 		purgeUserCache: mock(async () => true),
+		purgeEmojis: mock(async () => 0),
 		purgeAll: mock(async () => ({
 			message: "Cache purged",
 			users: 0,
@@ -217,6 +218,21 @@ describe("handlers", () => {
 			expect(response.status).toBeOneOf([200, 401, 500]);
 
 			if (origToken) process.env.BEARER_TOKEN = origToken;
+		});
+	});
+
+	describe("handlePurgeEmojis", () => {
+		it("does not crash regardless of auth configuration", async () => {
+			const cache = createMockCache();
+			const handlers = createHandlers(cache);
+			const request = new Request("http://localhost/emojis/purge", {
+				method: "POST",
+			});
+			const response = await handlers.handlePurgeEmojis(request, noopAnalytics);
+
+			// Same as handlePurgeUser: config is frozen at import time,
+			// so just verify it doesn't crash
+			expect(response.status).toBeOneOf([200, 401, 500]);
 		});
 	});
 
