@@ -33,6 +33,7 @@ interface SwaggerSpec {
 	paths: Record<string, Record<string, unknown>>;
 	components?: {
 		securitySchemes?: Record<string, SecurityScheme>;
+		schemas?: Record<string, Record<string, unknown>>;
 	};
 }
 
@@ -62,6 +63,29 @@ export class SwaggerGenerator {
 					bearerAuth: {
 						type: "http",
 						scheme: "bearer",
+					},
+				},
+				schemas: {
+					ErrorResponse: {
+						type: "object",
+						required: ["error"],
+						properties: {
+							error: {
+								type: "object",
+								required: ["code", "message", "hint"],
+								properties: {
+									code: { type: "string", example: "ROUTE_NOT_FOUND" },
+									message: {
+										type: "string",
+										example: "No endpoint exists at /example.",
+									},
+									hint: {
+										type: "string",
+										example: "See /swagger.json for available endpoints.",
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -176,17 +200,30 @@ export class SwaggerGenerator {
 
 		// Add responses
 		Object.entries(metadata.responses).forEach(([status, response]) => {
+			const isError = Number(status) >= 400;
+			const schema =
+				response.schema ??
+				(isError ? { $ref: "#/components/schemas/ErrorResponse" } : undefined);
 			(spec.responses as Record<string, unknown>)[status] = {
 				description: response.description,
-				...(response.schema && {
+				...(schema && {
 					content: {
-						"application/json": {
-							schema: response.schema,
-						},
+						"application/json": { schema },
 					},
 				}),
 			};
 		});
+
+		if (!("500" in (spec.responses as Record<string, unknown>))) {
+			(spec.responses as Record<string, unknown>)["500"] = {
+				description: "Unexpected server error",
+				content: {
+					"application/json": {
+						schema: { $ref: "#/components/schemas/ErrorResponse" },
+					},
+				},
+			};
+		}
 
 		// Add security if required
 		if (metadata.requiresAuth) {

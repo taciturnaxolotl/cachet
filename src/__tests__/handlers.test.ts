@@ -88,13 +88,50 @@ describe("handlers", () => {
 			expect(body.checks.database.status).toBe(true);
 		});
 
-		it("returns 503 when unhealthy", async () => {
+		it("returns a structured JSON error for an unhealthy detailed check", async () => {
+			const cache = createMockCache({
+				detailedHealthCheck: mock(async () => ({
+					status: "unhealthy" as const,
+					checks: {
+						database: { status: false, latency: 1 },
+						slackApi: { status: true },
+						queueDepth: 0,
+						queueDetail: { newUser: 0, refresh: 0 },
+						memoryUsage: { heapUsed: 50, heapTotal: 100, percentage: 50 },
+					},
+					uptime: 1234,
+				})),
+			});
+			const handlers = createHandlers(cache);
+			const response = await handlers.handleHealthCheck(
+				new Request("http://localhost/health?detailed=true"),
+				noopAnalytics,
+			);
+			const body = await jsonBody<{
+				error: { code: string; hint: string };
+				checks: { database: { status: boolean } };
+			}>(response);
+
+			expect(response.status).toBe(503);
+			expect(body.error.code).toBe("SERVICE_UNHEALTHY");
+			expect(body.checks.database.status).toBe(false);
+		});
+
+		it("returns a structured JSON error when unhealthy", async () => {
 			const cache = createMockCache({ healthCheck: mock(async () => false) });
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/health");
 			const response = await handlers.handleHealthCheck(request, noopAnalytics);
+			const body = await jsonBody<{
+				error: { code: string; message: string; hint: string };
+			}>(response);
 
 			expect(response.status).toBe(503);
+			expect(response.headers.get("content-type")).toContain(
+				"application/json",
+			);
+			expect(body.error.code).toBe("CACHE_UNAVAILABLE");
+			expect(body.error.hint.length).toBeGreaterThan(0);
 		});
 	});
 
@@ -154,8 +191,13 @@ describe("handlers", () => {
 			const handlers = createHandlers(cache);
 			const request = new Request("http://localhost/emojis/nonexistent");
 			const response = await handlers.handleGetEmoji(request, noopAnalytics);
+			const body = await jsonBody<{ error: { code: string; hint: string } }>(
+				response,
+			);
 
 			expect(response.status).toBe(404);
+			expect(body.error.code).toBe("EMOJI_NOT_FOUND");
+			expect(body.error.hint.length).toBeGreaterThan(0);
 		});
 
 		it("returns native emoji when not cached", async () => {
@@ -172,6 +214,21 @@ describe("handlers", () => {
 	});
 
 	describe("handleEmojiRedirect", () => {
+		it("returns a structured 404 when no redirect target exists", async () => {
+			const handlers = createHandlers(createMockCache());
+			const response = await handlers.handleEmojiRedirect(
+				new Request("http://localhost/emojis/definitely_not_an_emoji/r"),
+				noopAnalytics,
+			);
+			const body = await jsonBody<{ error: { code: string; hint: string } }>(
+				response,
+			);
+
+			expect(response.status).toBe(404);
+			expect(body.error.code).toBe("EMOJI_NOT_FOUND");
+			expect(body.error.hint.length).toBeGreaterThan(0);
+		});
+
 		it("redirects to native emoji when not cached", async () => {
 			const cache = createMockCache();
 			const handlers = createHandlers(cache);
@@ -213,9 +270,18 @@ describe("handlers", () => {
 			});
 			const response = await handlers.handlePurgeUser(request, noopAnalytics);
 
-			// This will depend on whether BEARER_TOKEN is set in the test env
-			// The important thing is it doesn't crash
+			// This depends on whether BEARER_TOKEN was set before config was imported.
 			expect(response.status).toBeOneOf([200, 401, 500]);
+			if (response.status >= 400) {
+				const body = await jsonBody<{
+					error: { code: string; message: string; hint: string };
+				}>(response);
+				expect(body.error.code).toBeOneOf([
+					"UNAUTHORIZED",
+					"AUTH_NOT_CONFIGURED",
+				]);
+				expect(body.error.hint.length).toBeGreaterThan(0);
+			}
 
 			if (origToken) process.env.BEARER_TOKEN = origToken;
 		});

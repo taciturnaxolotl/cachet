@@ -5,6 +5,10 @@ import { SlackCache } from "./cache";
 import { config } from "./config";
 import dashboard from "./dashboard.html";
 import { addCorsHeaders, corsPreflightResponse } from "./lib/cors";
+import {
+	createFallbackHandler,
+	internalErrorResponse,
+} from "./lib/http-errors";
 import { swaggerGenerator } from "./lib/swagger-generator";
 import { createApiRoutes } from "./routes/api-routes";
 import { SlackWrapper } from "./slackWrapper";
@@ -135,9 +139,19 @@ const allRoutes = {
 	...typedRoutes,
 };
 
+const fallbackHandler = createFallbackHandler(allRoutes);
+
 // Start the server
 const server = serve({
 	routes: allRoutes,
+	fetch(request) {
+		if (request.method === "OPTIONS") return corsPreflightResponse();
+		return addCorsHeaders(fallbackHandler(request));
+	},
+	error(error) {
+		console.error("Unhandled request error:", error);
+		return addCorsHeaders(internalErrorResponse());
+	},
 	port: config.port,
 	development: config.development,
 });

@@ -5,12 +5,27 @@
 import type { SlackCache } from "../cache";
 import { addCorsHeaders, corsPreflightResponse } from "./cors";
 import { fastPathname } from "./fast-url";
+import { internalErrorResponse } from "./http-errors";
 
 export type AnalyticsRecorder = (statusCode: number) => void;
 export type RouteHandlerWithAnalytics = (
 	request: Request,
 	recordAnalytics: AnalyticsRecorder,
 ) => Promise<Response> | Response;
+
+async function runHandler(
+	handler: RouteHandlerWithAnalytics,
+	request: Request,
+	recordAnalytics: AnalyticsRecorder,
+): Promise<Response> {
+	try {
+		return await handler(request, recordAnalytics);
+	} catch (error) {
+		console.error("API request failed:", error);
+		recordAnalytics(500);
+		return internalErrorResponse();
+	}
+}
 
 /**
  * Creates analytics wrapper with injected cache.
@@ -44,7 +59,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 					);
 				};
 
-				const response = await handler(request, recordAnalytics);
+				const response = await runHandler(handler, request, recordAnalytics);
 				return addCorsHeaders(response);
 			};
 		}
@@ -54,7 +69,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 			return async (request: Request): Promise<Response> => {
 				if (request.method === "OPTIONS") return corsPreflightResponse();
 				const noop: AnalyticsRecorder = () => {};
-				const response = await handler(request, noop);
+				const response = await runHandler(handler, request, noop);
 				return addCorsHeaders(response);
 			};
 		}
@@ -77,7 +92,7 @@ export function createAnalyticsWrapper(cache: SlackCache) {
 				);
 			};
 
-			const response = await handler(request, recordAnalytics);
+			const response = await runHandler(handler, request, recordAnalytics);
 			return addCorsHeaders(response);
 		};
 	};

@@ -7,6 +7,7 @@ import type { SlackCache } from "../cache";
 import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
 import { lastSegment, pathSegment, queryParam } from "../lib/fast-url";
+import { jsonError } from "../lib/http-errors";
 
 /**
  * Parse a string to a positive integer, returning a fallback if invalid
@@ -40,12 +41,22 @@ export function createHandlers(cache: SlackCache) {
 		if (!token) {
 			console.error("BEARER_TOKEN is not configured");
 			recordAnalytics(500);
-			return new Response("Server misconfigured", { status: 500 });
+			return jsonError(
+				500,
+				"AUTH_NOT_CONFIGURED",
+				"Administrative authentication is not configured.",
+				"Ask the service operator to configure BEARER_TOKEN.",
+			);
 		}
 		const authHeader = request.headers.get("authorization") || "";
 		if (authHeader !== `Bearer ${token}`) {
 			recordAnalytics(401);
-			return new Response("Unauthorized", { status: 401 });
+			return jsonError(
+				401,
+				"UNAUTHORIZED",
+				"A valid bearer token is required for this endpoint.",
+				"Send the service's token in the Authorization: Bearer <token> header.",
+			);
 		}
 		return null;
 	}
@@ -65,7 +76,16 @@ export function createHandlers(cache: SlackCache) {
 						? 200
 						: 200;
 			recordAnalytics(statusCode);
-			return Response.json(health, { status: statusCode });
+			if (statusCode === 503) {
+				return jsonError(
+					503,
+					"SERVICE_UNHEALTHY",
+					"One or more required service checks failed.",
+					"Inspect the checks object, resolve failed dependencies, and retry.",
+					{ extra: health },
+				);
+			}
+			return Response.json(health);
 		}
 
 		const isHealthy = await cache.healthCheck();
@@ -78,9 +98,12 @@ export function createHandlers(cache: SlackCache) {
 			});
 		} else {
 			recordAnalytics(503);
-			return Response.json(
-				{ status: "unhealthy", error: "Cache connection failed" },
-				{ status: 503 },
+			return jsonError(
+				503,
+				"CACHE_UNAVAILABLE",
+				"The cache database is unavailable.",
+				"Retry later or inspect /health?detailed=true for diagnostic checks.",
+				{ extra: { status: "unhealthy", cache: false } },
 			);
 		}
 	};
@@ -191,7 +214,12 @@ export function createHandlers(cache: SlackCache) {
 			const nativeEmojiUrl = getEmojiUrl(emojiName);
 			if (!nativeEmojiUrl) {
 				recordAnalytics(404);
-				return Response.json({ message: "Emoji not found" }, { status: 404 });
+				return jsonError(
+					404,
+					"EMOJI_NOT_FOUND",
+					`No cached or native emoji named "${emojiName}" was found.`,
+					"Check the name with GET /emojis and retry without surrounding colons.",
+				);
 			}
 
 			recordAnalytics(200);
@@ -220,7 +248,12 @@ export function createHandlers(cache: SlackCache) {
 			const nativeEmojiUrl = getEmojiUrl(emojiName);
 			if (!nativeEmojiUrl) {
 				recordAnalytics(404);
-				return Response.json({ message: "Emoji not found" }, { status: 404 });
+				return jsonError(
+					404,
+					"EMOJI_NOT_FOUND",
+					`No cached or native emoji named "${emojiName}" was found.`,
+					"Check the name with GET /emojis and retry without surrounding colons.",
+				);
 			}
 
 			recordAnalytics(302);
