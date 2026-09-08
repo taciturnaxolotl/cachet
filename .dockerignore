@@ -1,0 +1,8 @@
+node_modules
+data
+.env
+.env.*
+dist
+*.bun-build
+.DS_Store
+.git

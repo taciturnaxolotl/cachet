@@ -9,6 +9,7 @@ features:
 oauth_config:
   scopes:
     bot:
+      - users:read
       - users.profile:read
       - emoji:read
 settings:
