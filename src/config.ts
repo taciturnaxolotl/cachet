@@ -3,9 +3,17 @@
  * validates required values, and exports a frozen typed config object.
  */
 
+import { dialectForUrl } from "./db";
+
 export interface AppConfig {
 	readonly port: number;
 	readonly databasePath: string;
+	/**
+	 * External database connection string. When set it wins over
+	 * `databasePath`, letting the app run without a persistent volume.
+	 */
+	readonly databaseUrl: string | null;
+	readonly databaseMaxConnections: number;
 	readonly development: boolean;
 	readonly bearerToken: string | null;
 	readonly slack: {
@@ -51,6 +59,16 @@ function loadConfig(): AppConfig {
 		}
 	}
 
+	const databaseUrl = process.env.DATABASE_URL || null;
+	if (databaseUrl) {
+		const dialect = dialectForUrl(databaseUrl);
+		if (!dialect) {
+			errors.push(
+				`DATABASE_URL must start with postgres://, sqlite: or file:, got "${databaseUrl.split(":")[0]}:"`,
+			);
+		}
+	}
+
 	const bearerToken = process.env.BEARER_TOKEN || null;
 	if (!bearerToken) {
 		console.warn(
@@ -65,6 +83,11 @@ function loadConfig(): AppConfig {
 	const config: AppConfig = {
 		port,
 		databasePath: process.env.DATABASE_PATH ?? "./data/cachet.db",
+		databaseUrl,
+		databaseMaxConnections: parsePositiveInt(
+			process.env.DATABASE_MAX_CONNECTIONS,
+			10,
+		),
 		development: process.env.NODE_ENV === "dev",
 		bearerToken,
 		slack: {

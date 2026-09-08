@@ -23,48 +23,61 @@ const slackApp = new SlackWrapper({
 	minTimeMs: config.slack.minTimeMs,
 	requestTimeoutMs: config.slack.requestTimeoutMs,
 });
-const cache = new SlackCache(config.databasePath, 25, async () => {
-	console.log("Fetching emojis from Slack");
-	const emojis = await slackApp.getEmojiList();
-	// A Map keeps aliases named `constructor` from resolving off Object.prototype
-	const emojisByName = new Map(Object.entries(emojis));
-	const emojiEntries = Object.entries(emojis)
-		.map(([name, url]) => {
-			if (typeof url === "string" && url.startsWith("alias:")) {
-				const aliasName = url.substring(6);
-				const aliasUrl = emojisByName.get(aliasName) ?? getEmojiUrl(aliasName);
+const cache = await SlackCache.create(
+	{
+		url: config.databaseUrl,
+		path: config.databasePath,
+		maxConnections: config.databaseMaxConnections,
+	},
+	25,
+	async () => {
+		console.log("Fetching emojis from Slack");
+		const emojis = await slackApp.getEmojiList();
+		// A Map keeps aliases named `constructor` from resolving off Object.prototype
+		const emojisByName = new Map(Object.entries(emojis));
+		const emojiEntries = Object.entries(emojis)
+			.map(([name, url]) => {
+				if (typeof url === "string" && url.startsWith("alias:")) {
+					const aliasName = url.substring(6);
+					const aliasUrl =
+						emojisByName.get(aliasName) ?? getEmojiUrl(aliasName);
 
-				if (!aliasUrl) {
-					console.warn(`Could not find alias for ${aliasName}`);
-					return null;
+					if (!aliasUrl) {
+						console.warn(`Could not find alias for ${aliasName}`);
+						return null;
+					}
+
+					return {
+						name,
+						imageUrl: aliasUrl,
+						alias: aliasName,
+					};
 				}
-
 				return {
 					name,
-					imageUrl: aliasUrl,
-					alias: aliasName,
+					imageUrl: url,
+					alias: null,
 				};
-			}
-			return {
-				name,
-				imageUrl: url,
-				alias: null,
-			};
-		})
-		.filter(
-			(
-				entry,
-			): entry is { name: string; imageUrl: string; alias: string | null } =>
-				entry !== null,
-		);
+			})
+			.filter(
+				(
+					entry,
+				): entry is { name: string; imageUrl: string; alias: string | null } =>
+					entry !== null,
+			);
 
-	console.log("Batch inserting emojis");
-	await cache.batchInsertEmojis(emojiEntries);
-	console.log("Finished batch inserting emojis");
-});
+		console.log("Batch inserting emojis");
+		await cache.batchInsertEmojis(emojiEntries);
+		console.log("Finished batch inserting emojis");
+	},
+);
 
 // Inject SlackWrapper into cache for background user updates
 cache.setSlackWrapper(slackApp);
+
+// Populate the emoji cache if this database has none yet. Done after
+// construction so the callback above can safely use `cache`.
+await cache.seedEmojisIfEmpty();
 
 // Create the typed API routes with injected dependencies
 const apiRoutes = createApiRoutes(cache, slackApp);
@@ -160,18 +173,24 @@ console.log(`🚀 Server running on http://localhost:${server.port}`);
 
 // Graceful shutdown handling
 let shuttingDown = false;
-const shutdown = () => {
+const shutdown = async () => {
 	if (shuttingDown) return;
 	shuttingDown = true;
 	console.log("Shutting down gracefully...");
 	server.stop();
-	cache.close();
+	// Awaited: closing flushes buffered analytics and closes the uptime
+	// session, both of which are now round-trips to the database.
+	try {
+		await cache.close();
+	} catch (error) {
+		console.error("Error during shutdown:", error);
+	}
 	console.log("Shutdown complete");
 	process.exit(0);
 };
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
 
 process.on("unhandledRejection", (reason) => {
 	console.error("Unhandled promise rejection:", reason);

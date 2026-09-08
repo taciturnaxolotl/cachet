@@ -36,6 +36,45 @@ PORT=3000 # Optional
 # SLACK_MIN_TIME_MS=200     # Min ms between requests (default: 200)
 ```
 
+#### Storage: SQLite or Postgres
+
+Cachet runs on either backend, chosen by environment variable:
+
+| | SQLite (default) | Postgres |
+| --- | --- | --- |
+| Config | `DATABASE_PATH=/data/cachet.db` | `DATABASE_URL=postgres://...` |
+| Storage | a file on disk | an external server |
+| Persistent volume | required | not needed |
+| Replicas | one at a time | as many as you like |
+
+`DATABASE_URL` wins when both are set. Either way the schema is created on first
+boot, so there is no separate migration step.
+
+Postgres is the one to pick when the app should not own a volume — a container
+platform that attaches a read-write-once volume to a single node will refuse to
+start a second pod while the first still holds it, which shows up as
+`FailedAttachVolume: Multi-Attach error`. With the state in Postgres the app
+container is disposable, so redeploys and rescheduling stop fighting over the
+volume.
+
+There is a [`docker-compose.yml`](./docker-compose.yml) that brings up both:
+
+```bash
+docker compose up -d
+```
+
+Only the `db` service has a volume there, so `docker compose up -d --scale cachet=3`
+works as-is. Tuning knobs:
+
+```bash
+DATABASE_URL=postgres://cachet:password@db:5432/cachet
+DATABASE_MAX_CONNECTIONS=10 # Postgres pool size (default: 10, ignored by SQLite)
+```
+
+Moving between backends does not carry data across — everything Cachet stores is
+a cache, so a fresh database refetches the emoji list on boot and refills users
+lazily as they are requested.
+
 The slack app can be created from the [`manifest.yaml`](./manifest.yaml) in this repo. It just needs the `emoji:read` and `users:read` scopes.
 
 I included a service file in this repo that you can use to run the app. Just copy it to `~/.config/systemd/` and then run `systemctl --user enable cachet` and `systemctl --user start cachet` to start the app.
@@ -177,16 +216,20 @@ To create a new migration:
 
 ```typescript
 // src/migrations/myNewMigration.ts
-import { Database } from "bun:sqlite";
+import type { Queryable } from "../db/types";
 import type { Migration } from "./types";
 
 export const myNewMigration: Migration = {
   version: "0.3.2", // Should match package.json version
   description: "What this migration does",
+  // Optional: restrict to one backend. Omit to run on both.
+  // dialects: ["sqlite"],
 
-  async up(db: Database): Promise<void> {
-    // Migration code here
-    db.run(`ALTER TABLE my_table ADD COLUMN new_column TEXT`);
+  async up(db: Queryable): Promise<void> {
+    // Migration code here. Every call is async, and the whole `up` runs
+    // inside a transaction that rolls back if it throws -- so don't open
+    // another one in here.
+    await db.run(`ALTER TABLE my_table ADD COLUMN new_column TEXT`);
   }
 };
 
@@ -214,6 +257,32 @@ private async runMigrations() {
 Remember to update the version in `package.json` when adding new migrations.
 
 Note: Migrations must be defined in both `index.ts` and `cache.ts` to avoid circular dependencies in the import structure.
+
+Write migration SQL the same way the rest of the app does: `?` placeholders
+(the Postgres driver rewrites them to `$n`) and double quotes around camelCase
+identifiers, so Postgres keeps their case instead of folding to lowercase. The
+existing `0.3.1`–`0.4.0` migrations are marked `dialects: ["sqlite"]` because
+they reshape data written by SQLite-only releases; a fresh Postgres database has
+no such rows and skips them.
+
+### Testing both backends
+
+`bun test` covers SQLite. Point `TEST_DATABASE_URL` at a scratch Postgres to
+also run the suite against it, plus a parity suite that runs an identical
+workload through both engines and diffs the results:
+
+```bash
+docker run -d --name cachet-pg -e POSTGRES_PASSWORD=cachet \
+  -e POSTGRES_USER=cachet -e POSTGRES_DB=cachet -p 5432:5432 postgres:17-alpine
+
+TEST_DATABASE_URL=postgres://cachet:cachet@127.0.0.1:5432/cachet bun test
+```
+
+That database gets truncated, so don't aim it at anything you care about. The
+parity suite is worth keeping green: dialect bugs are quiet rather than loud —
+an unquoted camelCase alias, a `BIGINT` arriving as a string, or `MAX(a, b)`
+not being a scalar in Postgres each produce a plausible wrong number rather than
+an error.
 
 ### Adding New Routes
 
