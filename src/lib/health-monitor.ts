@@ -1,11 +1,12 @@
-import type { Database } from "bun:sqlite";
+import { asNumber } from "../db/dialect";
+import type { Db } from "../db/types";
 import type { SlackUserProvider } from "../types/cache-entities";
 
 /**
  * Health monitoring and uptime tracking service
  */
 export class HealthMonitor {
-	private db: Database;
+	private db: Db;
 	private currentSessionId?: number;
 	private slackWrapper?: SlackUserProvider;
 	private queueSizes: () => { newUser: number; refresh: number };
@@ -25,10 +26,7 @@ export class HealthMonitor {
 	} | null = null;
 	private detailedHealthCacheTTL = 5000;
 
-	constructor(
-		db: Database,
-		queueSizes: () => { newUser: number; refresh: number },
-	) {
+	constructor(db: Db, queueSizes: () => { newUser: number; refresh: number }) {
 		this.db = db;
 		this.queueSizes = queueSizes;
 	}
@@ -40,19 +38,21 @@ export class HealthMonitor {
 	/**
 	 * Starts a new uptime session and closes any orphaned sessions from crashes
 	 */
-	startUptimeSession() {
+	async startUptimeSession() {
 		const now = Date.now();
 
-		const orphanedSessions = this.db
-			.query(
-				"SELECT id, start_time FROM uptime_sessions WHERE end_time IS NULL",
-			)
-			.all() as Array<{ id: number; start_time: number }>;
+		const orphanedSessions = await this.db.all<{
+			id: number;
+			start_time: number;
+		}>(
+			`SELECT ${asNumber("id")} AS id, ${asNumber("start_time")} AS start_time
+			 FROM uptime_sessions WHERE end_time IS NULL`,
+		);
 
 		for (const session of orphanedSessions) {
-			const lastActivity = this.db
-				.query("SELECT MAX(bucket) * 1000 as last_bucket FROM traffic_10min")
-				.get() as { last_bucket: number | null };
+			const lastActivity = await this.db.get<{ last_bucket: number | null }>(
+				`SELECT ${asNumber("MAX(bucket) * 1000")} as last_bucket FROM traffic_10min`,
+			);
 
 			const estimatedEnd =
 				lastActivity?.last_bucket &&
@@ -61,7 +61,7 @@ export class HealthMonitor {
 					: session.start_time + 60000;
 
 			const duration = estimatedEnd - session.start_time;
-			this.db.run(
+			await this.db.run(
 				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
 				[estimatedEnd, duration, session.id],
 			);
@@ -70,24 +70,26 @@ export class HealthMonitor {
 			);
 		}
 
-		const result = this.db
-			.query("INSERT INTO uptime_sessions (start_time) VALUES (?) RETURNING id")
-			.get(now) as { id: number };
-		this.currentSessionId = result.id;
+		const result = await this.db.get<{ id: number }>(
+			`INSERT INTO uptime_sessions (start_time) VALUES (?) RETURNING ${asNumber("id")} AS id`,
+			[now],
+		);
+		this.currentSessionId = result?.id;
 	}
 
 	/**
 	 * Ends the current uptime session (call on graceful shutdown)
 	 */
-	endUptimeSession() {
+	async endUptimeSession() {
 		if (!this.currentSessionId) return;
 		const now = Date.now();
-		const session = this.db
-			.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
-			.get(this.currentSessionId) as { start_time: number } | null;
+		const session = await this.db.get<{ start_time: number }>(
+			`SELECT ${asNumber("start_time")} AS start_time FROM uptime_sessions WHERE id = ?`,
+			[this.currentSessionId],
+		);
 		if (session) {
 			const duration = now - session.start_time;
-			this.db.run(
+			await this.db.run(
 				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
 				[now, duration, this.currentSessionId],
 			);
@@ -97,16 +99,15 @@ export class HealthMonitor {
 	/**
 	 * Gets uptime percentage over the last 90 days
 	 */
-	getUptime(): number {
+	async getUptime(): Promise<number> {
 		const now = Date.now();
 		const ninetyDaysMs = 90 * 24 * 60 * 60 * 1000;
 		const windowStart = now - ninetyDaysMs;
 
-		const firstSession = this.db
-			.query(
-				"SELECT MIN(start_time) as first_start FROM uptime_sessions WHERE start_time >= ?",
-			)
-			.get(windowStart) as { first_start: number | null };
+		const firstSession = await this.db.get<{ first_start: number | null }>(
+			`SELECT ${asNumber("MIN(start_time)")} as first_start FROM uptime_sessions WHERE start_time >= ?`,
+			[windowStart],
+		);
 
 		if (!firstSession?.first_start) {
 			return 100;
@@ -115,22 +116,22 @@ export class HealthMonitor {
 		const totalWindow = now - firstSession.first_start;
 		if (totalWindow <= 0) return 100;
 
-		const completedResult = this.db
-			.query(
-				"SELECT COALESCE(SUM(duration), 0) as total FROM uptime_sessions WHERE duration IS NOT NULL AND start_time >= ?",
-			)
-			.get(windowStart) as { total: number };
+		const completedResult = await this.db.get<{ total: number }>(
+			`SELECT ${asNumber("COALESCE(SUM(duration), 0)")} as total FROM uptime_sessions WHERE duration IS NOT NULL AND start_time >= ?`,
+			[windowStart],
+		);
 
 		const currentSession = this.currentSessionId
-			? (this.db
-					.query("SELECT start_time FROM uptime_sessions WHERE id = ?")
-					.get(this.currentSessionId) as { start_time: number } | null)
+			? await this.db.get<{ start_time: number }>(
+					`SELECT ${asNumber("start_time")} AS start_time FROM uptime_sessions WHERE id = ?`,
+					[this.currentSessionId],
+				)
 			: null;
 
 		const currentDuration = currentSession
 			? now - Math.max(currentSession.start_time, windowStart)
 			: 0;
-		const totalUptime = completedResult.total + currentDuration;
+		const totalUptime = (completedResult?.total ?? 0) + currentDuration;
 
 		return Math.min(100, (totalUptime / totalWindow) * 100);
 	}
@@ -140,7 +141,7 @@ export class HealthMonitor {
 	 */
 	async healthCheck(): Promise<boolean> {
 		try {
-			this.db.query("SELECT 1").get();
+			await this.db.get("SELECT 1");
 			return true;
 		} catch (error) {
 			console.error("Cache health check failed:", error);
@@ -174,7 +175,7 @@ export class HealthMonitor {
 
 		try {
 			const start = Date.now();
-			this.db.query("SELECT 1").get();
+			await this.db.get("SELECT 1");
 			checks.database = { status: true, latency: Date.now() - start };
 		} catch (error) {
 			console.error("Database health check failed:", error);

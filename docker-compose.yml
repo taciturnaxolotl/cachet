@@ -1,0 +1,46 @@
+# Cachet with an external Postgres, so the app itself needs no volume.
+#
+#   docker compose up -d
+#
+# Only the `db` service keeps a volume. The app container is disposable and can
+# be scaled (`docker compose up -d --scale cachet=3`) because no state lives in
+# it. To go back to the single-container SQLite setup, drop DATABASE_URL and
+# mount a volume at /data instead.
+
+services:
+  cachet:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Selects the Postgres backend. Without this, the app falls back to a
+      # SQLite file at DATABASE_PATH.
+      DATABASE_URL: postgres://cachet:${POSTGRES_PASSWORD:-cachet}@db:5432/cachet
+      PORT: 3000
+      NODE_ENV: production
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:?set SLACK_BOT_TOKEN in .env}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:?set SLACK_SIGNING_SECRET in .env}
+      BEARER_TOKEN: ${BEARER_TOKEN:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: cachet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cachet}
+      POSTGRES_DB: cachet
+    volumes:
+      - cachet-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The app creates its schema on boot, so it only needs the server up.
+      test: ["CMD-SHELL", "pg_isready -U cachet -d cachet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  cachet-pgdata:

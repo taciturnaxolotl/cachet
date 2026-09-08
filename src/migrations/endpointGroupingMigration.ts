@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import type { Queryable } from "../db/types";
 import { normalizeEndpoint } from "./normalizeEndpoint";
 import type { Migration } from "./types";
 
@@ -9,16 +9,16 @@ import type { Migration } from "./types";
 export const endpointGroupingMigration: Migration = {
 	version: "0.3.1",
 	description: "Fix endpoint grouping in analytics data",
+	// Only ever relevant to a SQLite file written by 0.3.0 or earlier.
+	dialects: ["sqlite"],
 
-	async up(db: Database): Promise<void> {
+	async up(db: Queryable): Promise<void> {
 		console.log("Running endpoint grouping migration...");
 
 		// Check if request_analytics table exists (may have been dropped by later migration)
-		const tableExists = db
-			.query(
-				"SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'",
-			)
-			.get() as { name: string } | null;
+		const tableExists = await db.get<{ name: string }>(
+			"SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'",
+		);
 
 		if (!tableExists) {
 			console.log(
@@ -27,16 +27,14 @@ export const endpointGroupingMigration: Migration = {
 			return;
 		}
 
-		const results = db
-			.query(`
-      SELECT id, endpoint FROM request_analytics 
+		const results = await db.all<{ id: string; endpoint: string }>(`
+      SELECT id, endpoint FROM request_analytics
       WHERE endpoint LIKE '/users/%' OR endpoint LIKE '/emojis/%'
-    `)
-			.all() as Array<{ id: string; endpoint: string }>;
+    `);
 
 		console.log(`Found ${results.length} entries to check`);
 
-		// Collect updates, then batch apply in a transaction
+		// Collect updates, then apply them all (the migration runs in a transaction)
 		const updates: Array<{ id: string; newEndpoint: string }> = [];
 		for (const entry of results) {
 			const newEndpoint = normalizeEndpoint(entry.endpoint);
@@ -46,14 +44,12 @@ export const endpointGroupingMigration: Migration = {
 		}
 
 		if (updates.length > 0) {
-			const stmt = db.prepare(
-				"UPDATE request_analytics SET endpoint = ? WHERE id = ?",
-			);
-			db.transaction(() => {
-				for (const update of updates) {
-					stmt.run(update.newEndpoint, update.id);
-				}
-			})();
+			for (const update of updates) {
+				await db.run("UPDATE request_analytics SET endpoint = ? WHERE id = ?", [
+					update.newEndpoint,
+					update.id,
+				]);
+			}
 			console.log(`Updated ${updates.length} endpoints`);
 		} else {
 			console.log("No endpoints needed updating");

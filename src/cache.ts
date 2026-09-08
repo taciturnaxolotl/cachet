@@ -1,5 +1,7 @@
-import { Database } from "bun:sqlite";
 import { type ScheduledTask, schedule } from "node-cron";
+import { type DatabaseOptions, createDb, initSchema } from "./db";
+import { asNumber } from "./db/dialect";
+import type { Db } from "./db/types";
 import { AnalyticsQueryService } from "./lib/analytics-queries";
 import { HealthMonitor } from "./lib/health-monitor";
 import { bucketAnalyticsMigration } from "./migrations/bucketAnalyticsMigration";
@@ -47,12 +49,20 @@ const QUEUE_INTERVAL_MS = 5 * 1000;
 const LRU_MAX_SIZE = 2000;
 const LRU_TTL_MS = 60_000;
 
+/** Columns of `users`, with the epoch-ms expiration forced to a JS number. */
+const USER_COLUMNS = `id, "userId", "displayName", "realName", pronouns, "imageUrl", ${asNumber("expiration")} AS expiration`;
+/** Columns of `emojis`, with the epoch-ms expiration forced to a JS number. */
+const EMOJI_COLUMNS = `id, name, alias, "imageUrl", ${asNumber("expiration")} AS expiration`;
+
 /**
  * Cache class for storing user and emoji data with automatic expiration.
  * Composes AnalyticsQueryService and HealthMonitor for separation of concerns.
+ *
+ * Construct with `SlackCache.create()`: opening the database and running
+ * migrations are async, so they cannot happen in a constructor.
  */
 class Cache {
-	private db: Database;
+	private db: Db;
 	private defaultExpiration: number; // in hours
 	private onEmojiExpired?: () => void;
 
@@ -76,169 +86,69 @@ class Cache {
 	private cronTasks: ScheduledTask[] = [];
 	private queueIntervalId?: ReturnType<typeof setInterval>;
 
-	// Prepared statements for cache lookups
-	private stmtGetUser!: import("bun:sqlite").Statement;
-	private stmtGetEmoji!: import("bun:sqlite").Statement;
-
 	// In-memory LRU caches (Map preserves insertion order)
 	private userCache = new Map<string, { data: User; ts: number }>();
 	private emojiCache = new Map<string, { data: Emoji; ts: number }>();
 
-	constructor(
-		dbPath: string,
-		defaultExpirationHours = 24,
+	private constructor(
+		db: Db,
+		defaultExpirationHours: number,
 		onEmojiExpired?: () => void,
 	) {
-		this.db = new Database(dbPath);
+		this.db = db;
 		this.defaultExpiration = defaultExpirationHours;
 		this.onEmojiExpired = onEmojiExpired;
-
-		this.optimizeSQLite();
-		this.initDatabase();
 
 		this.analytics = new AnalyticsQueryService(this.db);
 		this.healthMonitor = new HealthMonitor(this.db, () => ({
 			newUser: this.newUserQueue.size,
 			refresh: this.refreshQueue.size,
 		}));
-
-		this.initPreparedStatements();
-		this.healthMonitor.startUptimeSession();
-		this.setupPurgeSchedule();
-		this.startQueueProcessor();
-
-		this.runMigrations();
 	}
 
-	private optimizeSQLite() {
-		this.db.run("PRAGMA journal_mode = WAL");
-		this.db.run("PRAGMA synchronous = NORMAL");
-		this.db.run("PRAGMA cache_size = -64000");
-		this.db.run("PRAGMA temp_store = MEMORY");
-		this.db.run("PRAGMA mmap_size = 268435456");
-		console.log("SQLite performance optimizations applied");
+	/**
+	 * Opens the configured database, creates the schema, runs migrations and
+	 * starts the background schedules.
+	 */
+	static async create(
+		database: DatabaseOptions | string,
+		defaultExpirationHours = 24,
+		onEmojiExpired?: () => void,
+	): Promise<Cache> {
+		// A bare string is treated as a SQLite path, which keeps the old
+		// `new SlackCache("./data/cachet.db")` shape working for tests.
+		const options: DatabaseOptions =
+			typeof database === "string" ? { path: database } : database;
+
+		const db = createDb(options);
+		const cache = new Cache(db, defaultExpirationHours, onEmojiExpired);
+
+		await initSchema(db);
+		await cache.runMigrations();
+
+		await cache.healthMonitor.startUptimeSession();
+		cache.setupPurgeSchedule();
+		cache.startQueueProcessor();
+
+		return cache;
 	}
 
-	private initPreparedStatements() {
-		this.stmtGetUser = this.db.prepare("SELECT * FROM users WHERE userId = ?");
-		this.stmtGetEmoji = this.db.prepare(
-			"SELECT * FROM emojis WHERE name = ? AND expiration > ?",
+	/**
+	 * Triggers the emoji refresh callback when no unexpired emojis are cached.
+	 *
+	 * Kept separate from `create()` so the callback -- which normally writes
+	 * back through this same instance -- only ever runs after construction has
+	 * returned.
+	 */
+	async seedEmojisIfEmpty(): Promise<void> {
+		if (!this.onEmojiExpired) return;
+
+		const result = await this.db.get<{ count: number }>(
+			`SELECT ${asNumber("COUNT(*)")} as count FROM emojis WHERE expiration > ?`,
+			[Date.now()],
 		);
-	}
-
-	private initDatabase() {
-		this.db.run(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        userId TEXT UNIQUE,
-        displayName TEXT,
-        realName TEXT,
-        pronouns TEXT,
-        imageUrl TEXT,
-        expiration INTEGER
-      )
-    `);
-
-		// Add realName column to existing databases
-		try {
-			this.db.run("ALTER TABLE users ADD COLUMN realName TEXT");
-		} catch (e) {
-			if (!(e instanceof Error && e.message.includes("duplicate column"))) {
-				console.error("Failed to add realName column:", e);
-			}
-		}
-
-		this.db.run(`
-      CREATE TABLE IF NOT EXISTS emojis (
-        id TEXT PRIMARY KEY,
-        name TEXT UNIQUE,
-        alias TEXT,
-        imageUrl TEXT,
-        expiration INTEGER
-      )
-    `);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS traffic_10min (
-				bucket INTEGER NOT NULL,
-				endpoint TEXT NOT NULL,
-				status_code INTEGER NOT NULL,
-				hits INTEGER NOT NULL DEFAULT 1,
-				total_response_time INTEGER NOT NULL DEFAULT 0,
-				PRIMARY KEY (bucket, endpoint, status_code)
-			) WITHOUT ROWID
-		`);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS traffic_hourly (
-				bucket INTEGER NOT NULL,
-				endpoint TEXT NOT NULL,
-				status_code INTEGER NOT NULL,
-				hits INTEGER NOT NULL DEFAULT 1,
-				total_response_time INTEGER NOT NULL DEFAULT 0,
-				PRIMARY KEY (bucket, endpoint, status_code)
-			) WITHOUT ROWID
-		`);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS traffic_daily (
-				bucket INTEGER NOT NULL,
-				endpoint TEXT NOT NULL,
-				status_code INTEGER NOT NULL,
-				hits INTEGER NOT NULL DEFAULT 1,
-				total_response_time INTEGER NOT NULL DEFAULT 0,
-				PRIMARY KEY (bucket, endpoint, status_code)
-			) WITHOUT ROWID
-		`);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS user_agent_stats (
-				user_agent TEXT PRIMARY KEY,
-				hits INTEGER NOT NULL DEFAULT 1,
-				last_seen INTEGER NOT NULL
-			) WITHOUT ROWID
-		`);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS referer_stats (
-				referer_host TEXT PRIMARY KEY,
-				hits INTEGER NOT NULL DEFAULT 1,
-				last_seen INTEGER NOT NULL
-			) WITHOUT ROWID
-		`);
-
-		this.db.run(`
-			CREATE TABLE IF NOT EXISTS uptime_sessions (
-				id INTEGER PRIMARY KEY AUTOINCREMENT,
-				start_time INTEGER NOT NULL,
-				end_time INTEGER,
-				duration INTEGER
-			)
-		`);
-
-		this.db.run(
-			"CREATE INDEX IF NOT EXISTS idx_traffic_10min_bucket ON traffic_10min(bucket)",
-		);
-		this.db.run(
-			"CREATE INDEX IF NOT EXISTS idx_traffic_hourly_bucket ON traffic_hourly(bucket)",
-		);
-		this.db.run(
-			"CREATE INDEX IF NOT EXISTS idx_traffic_daily_bucket ON traffic_daily(bucket)",
-		);
-		this.db.run(
-			"CREATE INDEX IF NOT EXISTS idx_user_agent_hits ON user_agent_stats(hits DESC)",
-		);
-		this.db.run(
-			"CREATE INDEX IF NOT EXISTS idx_referer_hits ON referer_stats(hits DESC)",
-		);
-
-		if (this.onEmojiExpired) {
-			const result = this.db
-				.query("SELECT COUNT(*) as count FROM emojis WHERE expiration > ?")
-				.get(Date.now()) as { count: number };
-			if (result.count === 0) {
-				this.onEmojiExpired();
-			}
+		if ((result?.count ?? 0) === 0) {
+			this.onEmojiExpired();
 		}
 	}
 
@@ -278,21 +188,24 @@ class Cache {
 			),
 		);
 
-		this.cronTasks.push(
-			schedule(
-				"0 8 * * *",
-				() => {
-					try {
-						console.log("Running scheduled VACUUM...");
-						this.db.run("VACUUM");
-						console.log("VACUUM completed");
-					} catch (error) {
-						console.error("Error during VACUUM:", error);
-					}
-				},
-				cronOptions,
-			),
-		);
+		// Postgres autovacuums; a manual VACUUM there would only add load.
+		if (this.db.dialect === "sqlite") {
+			this.cronTasks.push(
+				schedule(
+					"0 8 * * *",
+					async () => {
+						try {
+							console.log("Running scheduled VACUUM...");
+							await this.db.run("VACUUM");
+							console.log("VACUUM completed");
+						} catch (error) {
+							console.error("Error during VACUUM:", error);
+						}
+					},
+					cronOptions,
+				),
+			);
+		}
 	}
 
 	private async runMigrations() {
@@ -318,15 +231,18 @@ class Cache {
 	}
 
 	async purgeExpiredItems(): Promise<number> {
-		const result2 = this.db.run("DELETE FROM emojis WHERE expiration < ?", [
-			Date.now(),
-		]);
+		const result2 = await this.db.run(
+			"DELETE FROM emojis WHERE expiration < ?",
+			[Date.now()],
+		);
 
 		this.emojiCache.clear();
 
 		const oneDayAgoSec = Math.floor(Date.now() / 1000) - SECONDS_PER_DAY;
 		const cleanupBucket = oneDayAgoSec - (oneDayAgoSec % SECONDS_PER_10MIN);
-		this.db.run("DELETE FROM traffic_10min WHERE bucket < ?", [cleanupBucket]);
+		await this.db.run("DELETE FROM traffic_10min WHERE bucket < ?", [
+			cleanupBucket,
+		]);
 
 		return result2.changes;
 	}
@@ -335,9 +251,10 @@ class Cache {
 		const currentHour = new Date().getUTCHours();
 		if (currentHour >= 8 && currentHour < 10 && Math.random() < 0.1) {
 			const sevenDaysAgo = Date.now() - USER_CLEANUP_AGE_MS;
-			const result = this.db.run("DELETE FROM users WHERE expiration < ?", [
-				sevenDaysAgo,
-			]);
+			const result = await this.db.run(
+				"DELETE FROM users WHERE expiration < ?",
+				[sevenDaysAgo],
+			);
 			if (result.changes > 0) {
 				console.log(
 					`Lazy user cleanup: removed ${result.changes} expired users`,
@@ -349,7 +266,7 @@ class Cache {
 	async purgeUserCache(userId: string): Promise<boolean> {
 		try {
 			const normalizedId = userId.toUpperCase();
-			const result = this.db.run("DELETE FROM users WHERE userId = ?", [
+			const result = await this.db.run(`DELETE FROM users WHERE "userId" = ?`, [
 				normalizedId,
 			]);
 			this.userCache.delete(normalizedId);
@@ -362,7 +279,7 @@ class Cache {
 
 	async purgeEmojis(): Promise<number> {
 		try {
-			const result = this.db.run("DELETE FROM emojis");
+			const result = await this.db.run("DELETE FROM emojis");
 			this.emojiCache.clear();
 			if (this.onEmojiExpired && result.changes > 0) {
 				this.onEmojiExpired();
@@ -379,8 +296,8 @@ class Cache {
 		users: number;
 		emojis: number;
 	}> {
-		const result = this.db.run("DELETE FROM users");
-		const result2 = this.db.run("DELETE FROM emojis");
+		const result = await this.db.run("DELETE FROM users");
+		const result2 = await this.db.run("DELETE FROM emojis");
 
 		this.userCache.clear();
 		this.emojiCache.clear();
@@ -408,11 +325,11 @@ class Cache {
 		return this.healthMonitor.detailedHealthCheck();
 	}
 
-	endUptimeSession() {
-		this.healthMonitor.endUptimeSession();
+	async endUptimeSession() {
+		await this.healthMonitor.endUptimeSession();
 	}
 
-	getUptime(): number {
+	async getUptime(): Promise<number> {
 		return this.healthMonitor.getUptime();
 	}
 
@@ -460,17 +377,16 @@ class Cache {
 		}, QUEUE_INTERVAL_MS);
 	}
 
+	/** Extends a user's TTL without making the read path wait on the write. */
 	private flushTouchRefresh(newExpiration: number, normalizedId: string) {
-		queueMicrotask(() => {
-			try {
-				this.db.run("UPDATE users SET expiration = ? WHERE userId = ?", [
-					newExpiration,
-					normalizedId,
-				]);
-			} catch (error) {
+		this.db
+			.run(`UPDATE users SET expiration = ? WHERE "userId" = ?`, [
+				newExpiration,
+				normalizedId,
+			])
+			.catch((error) => {
 				console.error("Error in touch-refresh update:", error);
-			}
-		});
+			});
 	}
 
 	private async processUserUpdateQueue() {
@@ -595,19 +511,14 @@ class Cache {
 			Date.now() + (expirationHours || userDefaultTTL) * MS_PER_HOUR;
 
 		try {
-			this.db.run(
-				`INSERT INTO users (id, userId, displayName, realName, pronouns, imageUrl, expiration)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(userId)
-           DO UPDATE SET displayName = ?, realName = ?, pronouns = ?, imageUrl = ?, expiration = ?`,
+			await this.db.run(
+				`INSERT INTO users (id, "userId", "displayName", "realName", pronouns, "imageUrl", expiration)
+           VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+           ON CONFLICT("userId")
+           DO UPDATE SET "displayName" = ?3, "realName" = ?4, pronouns = ?5, "imageUrl" = ?6, expiration = ?7`,
 				[
 					id,
 					userId.toUpperCase(),
-					displayName,
-					realName,
-					pronouns,
-					imageUrl,
-					expiration,
 					displayName,
 					realName,
 					pronouns,
@@ -634,17 +545,15 @@ class Cache {
 			Date.now() + (expirationHours || this.defaultExpiration) * MS_PER_HOUR;
 
 		try {
-			this.db.run(
-				`INSERT INTO emojis (id, name, alias, imageUrl, expiration)
-          VALUES (?, ?, ?, ?, ?)
+			await this.db.run(
+				`INSERT INTO emojis (id, name, alias, "imageUrl", expiration)
+          VALUES (?1, ?2, ?3, ?4, ?5)
           ON CONFLICT(name)
-          DO UPDATE SET imageUrl = ?, expiration = ?`,
+          DO UPDATE SET "imageUrl" = ?4, expiration = ?5`,
 				[
 					id,
 					name.toLowerCase(),
 					alias?.toLowerCase() || null,
-					imageUrl,
-					expiration,
 					imageUrl,
 					expiration,
 				],
@@ -665,26 +574,23 @@ class Cache {
 			const expiration =
 				Date.now() + (expirationHours || this.defaultExpiration) * MS_PER_HOUR;
 
-			this.db.transaction(() => {
+			await this.db.transaction(async (tx) => {
 				for (const emoji of emojis) {
-					const id = crypto.randomUUID();
-					this.db.run(
-						`INSERT INTO emojis (id, name, alias, imageUrl, expiration)
-             VALUES (?, ?, ?, ?, ?)
+					await tx.run(
+						`INSERT INTO emojis (id, name, alias, "imageUrl", expiration)
+             VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(name)
-             DO UPDATE SET imageUrl = ?, expiration = ?`,
+             DO UPDATE SET "imageUrl" = ?4, expiration = ?5`,
 						[
-							id,
+							crypto.randomUUID(),
 							emoji.name.toLowerCase(),
 							emoji.alias?.toLowerCase() || null,
-							emoji.imageUrl,
-							expiration,
 							emoji.imageUrl,
 							expiration,
 						],
 					);
 				}
-			})();
+			});
 
 			this.emojiCache.clear();
 			return true;
@@ -711,7 +617,10 @@ class Cache {
 			this.userCache.delete(normalizedId);
 		}
 
-		const result = this.stmtGetUser.get(normalizedId) as User;
+		const result = await this.db.get<User>(
+			`SELECT ${USER_COLUMNS} FROM users WHERE "userId" = ?`,
+			[normalizedId],
+		);
 
 		if (!result) {
 			return null;
@@ -720,7 +629,7 @@ class Cache {
 		const expiration = new Date(result.expiration).getTime();
 
 		if (expiration < now) {
-			this.db.run("DELETE FROM users WHERE userId = ?", [normalizedId]);
+			await this.db.run(`DELETE FROM users WHERE "userId" = ?`, [normalizedId]);
 			return null;
 		}
 
@@ -773,7 +682,10 @@ class Cache {
 			this.emojiCache.delete(normalizedName);
 		}
 
-		const result = this.stmtGetEmoji.get(normalizedName, now) as Emoji;
+		const result = await this.db.get<Emoji>(
+			`SELECT ${EMOJI_COLUMNS} FROM emojis WHERE name = ? AND expiration > ?`,
+			[normalizedName, now],
+		);
 
 		if (!result) return null;
 
@@ -797,9 +709,10 @@ class Cache {
 	}
 
 	async getAllEmojis(): Promise<Emoji[]> {
-		const results = this.db
-			.query("SELECT * FROM emojis WHERE expiration > ?")
-			.all(Date.now()) as Emoji[];
+		const results = await this.db.all<Emoji>(
+			`SELECT ${EMOJI_COLUMNS} FROM emojis WHERE expiration > ?`,
+			[Date.now()],
+		);
 
 		return results.map((result) => ({
 			type: "emoji",
@@ -813,8 +726,8 @@ class Cache {
 
 	// --- Delegated analytics methods ---
 
-	flushAnalytics(): void {
-		this.analytics.flushWriteBuffer();
+	flushAnalytics(): Promise<void> {
+		return this.analytics.flushWriteBuffer();
 	}
 
 	recordRequest(
@@ -834,23 +747,25 @@ class Cache {
 	}
 
 	async getAnalytics(days: number = 7): Promise<FullAnalyticsData> {
-		this.analytics.flushWriteBuffer();
+		await this.analytics.flushWriteBuffer();
 		return this.analytics.getAnalytics(days, () => this.getUptime());
 	}
 
 	async getEssentialStats(days: number = 7): Promise<EssentialStatsData> {
-		this.analytics.flushWriteBuffer();
+		await this.analytics.flushWriteBuffer();
 		return this.analytics.getEssentialStats(days, () => this.getUptime());
 	}
 
 	async getChartData(days: number = 7): Promise<ChartData> {
-		this.analytics.flushWriteBuffer();
+		await this.analytics.flushWriteBuffer();
 		return this.analytics.getChartData(days);
 	}
 
-	getTraffic(
+	async getTraffic(
 		options: { days?: number; startTime?: number; endTime?: number } = {},
-	): Array<{ bucket: number; hits: number; avgLatency: number | null }> {
+	): Promise<
+		Array<{ bucket: number; hits: number; avgLatency: number | null }>
+	> {
 		return this.analytics.getTraffic(options);
 	}
 
@@ -869,7 +784,7 @@ class Cache {
 	 * Closes all resources: stops cron jobs, clears intervals, closes database.
 	 * Call this during graceful shutdown.
 	 */
-	close() {
+	async close() {
 		for (const task of this.cronTasks) {
 			task.stop();
 		}
@@ -880,9 +795,9 @@ class Cache {
 			this.queueIntervalId = undefined;
 		}
 
-		this.healthMonitor.endUptimeSession();
-		this.analytics.flushWriteBuffer();
-		this.db.close();
+		await this.healthMonitor.endUptimeSession();
+		await this.analytics.flushWriteBuffer();
+		await this.db.close();
 	}
 }
 

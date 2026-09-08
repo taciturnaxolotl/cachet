@@ -347,7 +347,7 @@ export function createHandlers(cache: SlackCache) {
 			options.days = parseDays(request.url);
 		}
 
-		const traffic = cache.getTraffic(options);
+		const traffic = await cache.getTraffic(options);
 		recordAnalytics(200);
 		return Response.json(traffic);
 	};
