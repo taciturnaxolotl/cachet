@@ -48,6 +48,12 @@ const QUEUE_BATCH_SIZE = 10;
 const QUEUE_INTERVAL_MS = 5 * 1000;
 const LRU_MAX_SIZE = 2000;
 const LRU_TTL_MS = 60_000;
+/**
+ * Emoji rows per INSERT statement. At 5 bound parameters each, 500 rows is
+ * 2500 parameters -- comfortably inside both engines' limits (Postgres caps a
+ * statement at 65535).
+ */
+const EMOJI_INSERT_CHUNK = 500;
 
 /** Columns of `users`, with the epoch-ms expiration forced to a JS number. */
 const USER_COLUMNS = `id, "userId", "displayName", "realName", pronouns, "imageUrl", ${asNumber("expiration")} AS expiration`;
@@ -574,20 +580,42 @@ class Cache {
 			const expiration =
 				Date.now() + (expirationHours || this.defaultExpiration) * MS_PER_HOUR;
 
+			// A repeated key inside one multi-row upsert makes Postgres reject the
+			// whole statement ("cannot affect row a second time"), so collapse
+			// duplicates first, last one winning.
+			const byName = new Map<
+				string,
+				{ name: string; imageUrl: string; alias: string | null }
+			>();
+			for (const emoji of emojis) {
+				byName.set(emoji.name.toLowerCase(), emoji);
+			}
+			const rows = Array.from(byName.values());
+
 			await this.db.transaction(async (tx) => {
-				for (const emoji of emojis) {
-					await tx.run(
-						`INSERT INTO emojis (id, name, alias, "imageUrl", expiration)
-             VALUES (?1, ?2, ?3, ?4, ?5)
-             ON CONFLICT(name)
-             DO UPDATE SET "imageUrl" = ?4, expiration = ?5`,
-						[
+				// One statement per chunk rather than per emoji. A row-at-a-time
+				// loop costs one round trip each, which is invisible against a
+				// local file but turns a few thousand emojis into a few thousand
+				// sequential round trips against a remote database.
+				for (let start = 0; start < rows.length; start += EMOJI_INSERT_CHUNK) {
+					const chunk = rows.slice(start, start + EMOJI_INSERT_CHUNK);
+					const params: unknown[] = [];
+					for (const emoji of chunk) {
+						params.push(
 							crypto.randomUUID(),
 							emoji.name.toLowerCase(),
 							emoji.alias?.toLowerCase() || null,
 							emoji.imageUrl,
 							expiration,
-						],
+						);
+					}
+					const values = chunk.map(() => "(?, ?, ?, ?, ?)").join(", ");
+					await tx.run(
+						`INSERT INTO emojis (id, name, alias, "imageUrl", expiration)
+             VALUES ${values}
+             ON CONFLICT(name)
+             DO UPDATE SET "imageUrl" = excluded."imageUrl", expiration = excluded.expiration`,
+						params,
 					);
 				}
 			});
