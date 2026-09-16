@@ -1,5 +1,5 @@
 import { type ScheduledTask, schedule } from "node-cron";
-import { type DatabaseOptions, createDb, initSchema } from "./db";
+import { createDb, type DatabaseOptions, initSchema } from "./db";
 import { asNumber } from "./db/dialect";
 import type { Db } from "./db/types";
 import { AnalyticsQueryService } from "./lib/analytics-queries";
@@ -61,6 +61,16 @@ const USER_COLUMNS = `id, "userId", "displayName", "realName", pronouns, "imageU
 const EMOJI_COLUMNS = `id, name, alias, "imageUrl", ${asNumber("expiration")} AS expiration`;
 
 /**
+ * Refills the emoji cache from the source of truth.
+ *
+ * Receives the cache to write back through, rather than closing over it. That
+ * lets `create()` invoke the callback itself once the instance is ready, so
+ * there is no half-initialised window and no second call for the caller to
+ * remember.
+ */
+export type EmojiRefresh = (cache: Cache) => void | Promise<void>;
+
+/**
  * Cache class for storing user and emoji data with automatic expiration.
  * Composes AnalyticsQueryService and HealthMonitor for separation of concerns.
  *
@@ -70,7 +80,7 @@ const EMOJI_COLUMNS = `id, name, alias, "imageUrl", ${asNumber("expiration")} AS
 class Cache {
 	private db: Db;
 	private defaultExpiration: number; // in hours
-	private onEmojiExpired?: () => void;
+	private onEmojiExpired?: EmojiRefresh;
 
 	// Background user update queue to avoid Slack API limits
 	// Priority queue: newUserQueue (misses) processed before refreshQueue (touch-refreshes)
@@ -99,7 +109,7 @@ class Cache {
 	private constructor(
 		db: Db,
 		defaultExpirationHours: number,
-		onEmojiExpired?: () => void,
+		onEmojiExpired?: EmojiRefresh,
 	) {
 		this.db = db;
 		this.defaultExpiration = defaultExpirationHours;
@@ -113,19 +123,17 @@ class Cache {
 	}
 
 	/**
-	 * Opens the configured database, creates the schema, runs migrations and
-	 * starts the background schedules.
+	 * Opens the configured database, creates the schema, runs migrations,
+	 * starts the background schedules and seeds the emoji cache if it is empty.
+	 *
+	 * The returned cache is fully initialised -- there is no follow-up call the
+	 * caller has to remember to make.
 	 */
 	static async create(
-		database: DatabaseOptions | string,
+		options: DatabaseOptions,
 		defaultExpirationHours = 24,
-		onEmojiExpired?: () => void,
+		onEmojiExpired?: EmojiRefresh,
 	): Promise<Cache> {
-		// A bare string is treated as a SQLite path, which keeps the old
-		// `new SlackCache("./data/cachet.db")` shape working for tests.
-		const options: DatabaseOptions =
-			typeof database === "string" ? { path: database } : database;
-
 		const db = createDb(options);
 		const cache = new Cache(db, defaultExpirationHours, onEmojiExpired);
 
@@ -136,17 +144,21 @@ class Cache {
 		cache.setupPurgeSchedule();
 		cache.startQueueProcessor();
 
+		await cache.seedEmojisIfEmpty();
+
 		return cache;
 	}
 
 	/**
-	 * Triggers the emoji refresh callback when no unexpired emojis are cached.
+	 * Kicks off an initial emoji fill when nothing unexpired is cached.
 	 *
-	 * Kept separate from `create()` so the callback -- which normally writes
-	 * back through this same instance -- only ever runs after construction has
-	 * returned.
+	 * The emptiness check is awaited because it is a cheap local query, but the
+	 * refill itself is not: it is a network round trip to Slack, and a cache
+	 * should still come up and serve what it already has when its upstream is
+	 * unreachable. Blocking here would turn a Slack outage into a failure to
+	 * boot at all.
 	 */
-	async seedEmojisIfEmpty(): Promise<void> {
+	private async seedEmojisIfEmpty(): Promise<void> {
 		if (!this.onEmojiExpired) return;
 
 		const result = await this.db.get<{ count: number }>(
@@ -154,7 +166,7 @@ class Cache {
 			[Date.now()],
 		);
 		if ((result?.count ?? 0) === 0) {
-			this.onEmojiExpired();
+			this.refillEmojis();
 		}
 	}
 
@@ -183,7 +195,7 @@ class Cache {
 					try {
 						console.log("Scheduled emoji update starting...");
 						if (this.onEmojiExpired) {
-							await this.onEmojiExpired();
+							await this.onEmojiExpired(this);
 							console.log("Scheduled emoji update completed");
 						}
 					} catch (error) {
@@ -287,8 +299,8 @@ class Cache {
 		try {
 			const result = await this.db.run("DELETE FROM emojis");
 			this.emojiCache.clear();
-			if (this.onEmojiExpired && result.changes > 0) {
-				this.onEmojiExpired();
+			if (result.changes > 0) {
+				this.refillEmojis();
 			}
 			return result.changes;
 		} catch (error) {
@@ -297,27 +309,45 @@ class Cache {
 		}
 	}
 
+	/**
+	 * Kicks off an emoji refill without blocking the caller. The refetch is a
+	 * slow network round trip and no caller waits on its result, so failures are
+	 * logged rather than surfaced.
+	 */
+	private refillEmojis(): void {
+		if (!this.onEmojiExpired) return;
+		void (async () => {
+			try {
+				await this.onEmojiExpired?.(this);
+			} catch (error) {
+				console.error("Error refilling emoji cache:", error);
+			}
+		})();
+	}
+
 	async purgeAll(): Promise<{
 		message: string;
 		users: number;
 		emojis: number;
 	}> {
-		const result = await this.db.run("DELETE FROM users");
-		const result2 = await this.db.run("DELETE FROM emojis");
+		// One transaction: a half-purged cache is harder to reason about than
+		// either a purged one or an untouched one.
+		const { users, emojis } = await this.db.transaction(async (tx) => ({
+			users: (await tx.run("DELETE FROM users")).changes,
+			emojis: (await tx.run("DELETE FROM emojis")).changes,
+		}));
 
 		this.userCache.clear();
 		this.emojiCache.clear();
 
-		if (this.onEmojiExpired) {
-			if (result2.changes > 0) {
-				this.onEmojiExpired();
-			}
+		if (emojis > 0) {
+			this.refillEmojis();
 		}
 
 		return {
 			message: "Cache purged",
-			users: result.changes,
-			emojis: result2.changes,
+			users,
+			emojis,
 		};
 	}
 

@@ -23,14 +23,53 @@ const slackApp = new SlackWrapper({
 	minTimeMs: config.slack.minTimeMs,
 	requestTimeoutMs: config.slack.requestTimeoutMs,
 });
-const cache = await SlackCache.create(
+
+// Signal handlers are registered before any top-level await, because booting
+// is slow -- opening the database, running migrations and seeding emojis from
+// Slack can take many seconds. The process is PID 1 in a container, and PID 1
+// discards signals that have no handler installed, so a SIGTERM arriving
+// during boot would be dropped silently and the container SIGKILLed once the
+// stop timeout expired. Anything buffered would be lost with it.
+let cache: SlackCache | undefined;
+let server: ReturnType<typeof serve> | undefined;
+let shuttingDown = false;
+
+const shutdown = async () => {
+	if (shuttingDown) return;
+	shuttingDown = true;
+	console.log("Shutting down gracefully...");
+	server?.stop();
+	// Awaited: closing flushes buffered analytics and closes the uptime
+	// session, both of which are now round-trips to the database.
+	try {
+		await cache?.close();
+	} catch (error) {
+		console.error("Error during shutdown:", error);
+	}
+	console.log("Shutdown complete");
+	process.exit(0);
+};
+
+process.on("SIGINT", () => void shutdown());
+process.on("SIGTERM", () => void shutdown());
+
+process.on("unhandledRejection", (reason) => {
+	console.error("Unhandled promise rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+	console.error("Uncaught exception:", error);
+	process.exit(1);
+});
+
+cache = await SlackCache.create(
 	{
 		url: config.databaseUrl,
 		path: config.databasePath,
 		maxConnections: config.databaseMaxConnections,
 	},
 	25,
-	async () => {
+	async (cache) => {
 		console.log("Fetching emojis from Slack");
 		const emojis = await slackApp.getEmojiList();
 		// A Map keeps aliases named `constructor` from resolving off Object.prototype
@@ -74,10 +113,6 @@ const cache = await SlackCache.create(
 
 // Inject SlackWrapper into cache for background user updates
 cache.setSlackWrapper(slackApp);
-
-// Populate the emoji cache if this database has none yet. Done after
-// construction so the callback above can safely use `cache`.
-await cache.seedEmojisIfEmpty();
 
 // Create the typed API routes with injected dependencies
 const apiRoutes = createApiRoutes(cache, slackApp);
@@ -155,7 +190,7 @@ const allRoutes = {
 const fallbackHandler = createFallbackHandler(allRoutes);
 
 // Start the server
-const server = serve({
+server = serve({
 	routes: allRoutes,
 	fetch(request) {
 		if (request.method === "OPTIONS") return corsPreflightResponse();
@@ -170,35 +205,5 @@ const server = serve({
 });
 
 console.log(`🚀 Server running on http://localhost:${server.port}`);
-
-// Graceful shutdown handling
-let shuttingDown = false;
-const shutdown = async () => {
-	if (shuttingDown) return;
-	shuttingDown = true;
-	console.log("Shutting down gracefully...");
-	server.stop();
-	// Awaited: closing flushes buffered analytics and closes the uptime
-	// session, both of which are now round-trips to the database.
-	try {
-		await cache.close();
-	} catch (error) {
-		console.error("Error during shutdown:", error);
-	}
-	console.log("Shutdown complete");
-	process.exit(0);
-};
-
-process.on("SIGINT", () => void shutdown());
-process.on("SIGTERM", () => void shutdown());
-
-process.on("unhandledRejection", (reason) => {
-	console.error("Unhandled promise rejection:", reason);
-});
-
-process.on("uncaughtException", (error) => {
-	console.error("Uncaught exception:", error);
-	process.exit(1);
-});
 
 export { cache, slackApp };
