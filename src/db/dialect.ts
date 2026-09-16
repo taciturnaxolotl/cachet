@@ -6,7 +6,7 @@
  * site instead.
  */
 
-import type { Dialect } from "./types";
+import type { Dialect, Queryable } from "./types";
 
 /**
  * `?` / `?N` placeholders -> `$n`, leaving string literals, quoted identifiers
@@ -129,4 +129,23 @@ export function greatest(dialect: Dialect, a: string, b: string): string {
  */
 export function asNumber(expr: string): string {
 	return `CAST(${expr} AS DOUBLE PRECISION)`;
+}
+
+/**
+ * Whether `table` exists in the database this handle points at.
+ *
+ * Each engine keeps its catalogue in a different place, and naming the wrong one
+ * does not return `false`, it raises -- `sqlite_master` is not a relation on
+ * Postgres, and a failed statement inside a transaction aborts the whole
+ * transaction. So the question has to be asked in the local dialect.
+ */
+export async function tableExists(
+	db: Queryable,
+	table: string,
+): Promise<boolean> {
+	const sql =
+		db.dialect === "sqlite"
+			? "SELECT name FROM sqlite_master WHERE type='table' AND name = ?"
+			: "SELECT tablename AS name FROM pg_tables WHERE schemaname = current_schema() AND tablename = ?";
+	return (await db.get<{ name: string }>(sql, [table])) !== null;
 }

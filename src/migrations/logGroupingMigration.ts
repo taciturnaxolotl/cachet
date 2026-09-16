@@ -1,3 +1,4 @@
+import { tableExists } from "../db/dialect";
 import type { Queryable } from "../db/types";
 import { normalizeEndpoint } from "./normalizeEndpoint";
 import type { Migration } from "./types";
@@ -5,22 +6,20 @@ import type { Migration } from "./types";
 /**
  * Migration to group request logs that aren't already grouped
  * This migration normalizes request_analytics data to use consistent endpoint grouping
+ *
+ * `request_analytics` is a legacy table that 0.3.x and earlier created and that
+ * the current schema never creates, so on any database built by a recent
+ * release this finds nothing and returns.
  */
 export const logGroupingMigration: Migration = {
 	version: "0.3.2",
 	description: "Group request logs that aren't already grouped",
-	// Only ever relevant to a SQLite file written by 0.3.x or earlier.
-	dialects: ["sqlite"],
 
 	async up(db: Queryable): Promise<void> {
 		console.log("Running log grouping migration...");
 
 		// Check if request_analytics table exists (may have been dropped by later migration)
-		const tableExists = await db.get<{ name: string }>(
-			"SELECT name FROM sqlite_master WHERE type='table' AND name='request_analytics'",
-		);
-
-		if (!tableExists) {
+		if (!(await tableExists(db, "request_analytics"))) {
 			console.log(
 				"request_analytics table not found, skipping log grouping migration",
 			);

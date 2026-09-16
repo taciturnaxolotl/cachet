@@ -14,11 +14,7 @@ export class MigrationManager {
 	constructor(db: Db, migrations: Migration[]) {
 		this.db = db;
 		this.currentVersion = version;
-		// Migrations that target a different backend can never apply here.
-		this.migrations = migrations.filter(
-			(migration) =>
-				!migration.dialects || migration.dialects.includes(db.dialect),
-		);
+		this.migrations = migrations;
 	}
 
 	private async initMigrationTable() {
@@ -74,104 +70,93 @@ export class MigrationManager {
 		);
 	}
 
+	/**
+	 * Applies every pending migration, in version order.
+	 *
+	 * Throws if any of them fails. A half-migrated database is not a state the
+	 * app can serve from, so the failure has to reach the caller rather than be
+	 * reported in a return value the caller might not read.
+	 */
 	async runMigrations(): Promise<{
-		success: boolean;
 		migrationsApplied: number;
 		lastAppliedVersion: string | null;
-		error?: string;
 	}> {
-		try {
-			await this.initMigrationTable();
+		await this.initMigrationTable();
 
-			const sortedMigrations = [...this.migrations].sort((a, b) => {
-				return this.compareVersions(a.version, b.version);
-			});
+		const sortedMigrations = [...this.migrations].sort((a, b) => {
+			return this.compareVersions(a.version, b.version);
+		});
 
-			const lastApplied = await this.getLastAppliedMigration();
-			let migrationsApplied = 0;
-			let lastAppliedVersion = lastApplied?.version || null;
+		const lastApplied = await this.getLastAppliedMigration();
+		let migrationsApplied = 0;
+		let lastAppliedVersion = lastApplied?.version || null;
 
-			console.log(`Current app version: ${this.currentVersion}`);
-			console.log(`Last applied migration: ${lastAppliedVersion || "None"}`);
+		console.log(`Current app version: ${this.currentVersion}`);
+		console.log(`Last applied migration: ${lastAppliedVersion || "None"}`);
 
-			if (!lastAppliedVersion) {
-				const previousVersion = this.getPreviousVersion(this.currentVersion);
-				if (previousVersion) {
-					console.log(
-						`No migrations table found. Assuming upgrade from ${previousVersion}`,
-					);
-					await this.recordMigration(
-						this.db,
-						previousVersion,
-						"Virtual migration for existing installation",
-					);
-					lastAppliedVersion = previousVersion;
-				}
-			}
-
-			for (const migration of sortedMigrations) {
-				if (await this.isMigrationApplied(migration.version)) {
-					console.log(
-						`Migration ${migration.version} already applied, skipping`,
-					);
-					continue;
-				}
-
-				if (this.compareVersions(migration.version, this.currentVersion) > 0) {
-					console.log(
-						`Migration ${migration.version} is for a future version, skipping`,
-					);
-					continue;
-				}
-
-				if (
-					lastAppliedVersion &&
-					this.compareVersions(migration.version, lastAppliedVersion) <= 0
-				) {
-					console.log(
-						`Migration ${migration.version} is older than last applied (${lastAppliedVersion}), skipping`,
-					);
-					continue;
-				}
-
+		if (!lastAppliedVersion) {
+			const previousVersion = this.getPreviousVersion(this.currentVersion);
+			if (previousVersion) {
 				console.log(
-					`Applying migration ${migration.version}: ${migration.description}`,
+					`No migrations table found. Assuming upgrade from ${previousVersion}`,
 				);
+				await this.recordMigration(
+					this.db,
+					previousVersion,
+					"Virtual migration for existing installation",
+				);
+				lastAppliedVersion = previousVersion;
+			}
+		}
 
-				try {
-					await this.db.transaction(async (tx) => {
-						await migration.up(tx);
-						await this.recordMigration(
-							tx,
-							migration.version,
-							migration.description,
-						);
-					});
-				} catch (migrationError) {
-					throw new Error(
-						`Migration ${migration.version} failed: ${migrationError instanceof Error ? migrationError.message : String(migrationError)}`,
-					);
-				}
-
-				migrationsApplied++;
-				lastAppliedVersion = migration.version;
-				console.log(`Migration ${migration.version} applied successfully`);
+		for (const migration of sortedMigrations) {
+			if (await this.isMigrationApplied(migration.version)) {
+				console.log(`Migration ${migration.version} already applied, skipping`);
+				continue;
 			}
 
-			return {
-				success: true,
-				migrationsApplied,
-				lastAppliedVersion,
-			};
-		} catch (error) {
-			console.error("Error running migrations:", error);
-			return {
-				success: false,
-				migrationsApplied: 0,
-				lastAppliedVersion: null,
-				error: error instanceof Error ? error.message : String(error),
-			};
+			if (this.compareVersions(migration.version, this.currentVersion) > 0) {
+				console.log(
+					`Migration ${migration.version} is for a future version, skipping`,
+				);
+				continue;
+			}
+
+			if (
+				lastAppliedVersion &&
+				this.compareVersions(migration.version, lastAppliedVersion) <= 0
+			) {
+				console.log(
+					`Migration ${migration.version} is older than last applied (${lastAppliedVersion}), skipping`,
+				);
+				continue;
+			}
+
+			console.log(
+				`Applying migration ${migration.version}: ${migration.description}`,
+			);
+
+			try {
+				await this.db.transaction(async (tx) => {
+					await migration.up(tx);
+					await this.recordMigration(
+						tx,
+						migration.version,
+						migration.description,
+					);
+				});
+			} catch (migrationError) {
+				throw new Error(`Migration ${migration.version} failed`, {
+					cause: migrationError,
+				});
+			}
+
+			migrationsApplied++;
+			lastAppliedVersion = migration.version;
+			console.log(`Migration ${migration.version} applied successfully`);
 		}
+
+		return { migrationsApplied, lastAppliedVersion };
 	}
 
 	private getPreviousVersion(version: string): string | null {

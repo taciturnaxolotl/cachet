@@ -226,25 +226,28 @@ class Cache {
 		}
 	}
 
+	/**
+	 * Applies any pending migrations.
+	 *
+	 * Deliberately does not catch: booting on a half-migrated database is worse
+	 * than refusing to boot, and a swallowed failure here used to log "No new
+	 * migrations to apply" and carry on.
+	 */
 	private async runMigrations() {
-		try {
-			const migrations = [
-				endpointGroupingMigration,
-				logGroupingMigration,
-				bucketAnalyticsMigration,
-			];
-			const migrationManager = new MigrationManager(this.db, migrations);
-			const result = await migrationManager.runMigrations();
+		const migrations = [
+			endpointGroupingMigration,
+			logGroupingMigration,
+			bucketAnalyticsMigration,
+		];
+		const migrationManager = new MigrationManager(this.db, migrations);
+		const result = await migrationManager.runMigrations();
 
-			if (result.migrationsApplied > 0) {
-				console.log(
-					`Applied ${result.migrationsApplied} migrations. Latest version: ${result.lastAppliedVersion}`,
-				);
-			} else {
-				console.log("No new migrations to apply");
-			}
-		} catch (error) {
-			console.error("Error running migrations:", error);
+		if (result.migrationsApplied > 0) {
+			console.log(
+				`Applied ${result.migrationsApplied} migrations. Latest version: ${result.lastAppliedVersion}`,
+			);
+		} else {
+			console.log("No new migrations to apply");
 		}
 	}
 
