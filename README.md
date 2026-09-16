@@ -32,8 +32,9 @@ DATABASE_PATH=/path/to/db.sqlite # Optional
 PORT=3000 # Optional
 
 # Optional: Slack rate limiting (adjust if hitting rate limits)
-# SLACK_MAX_CONCURRENT=3    # Max concurrent requests (default: 3)
-# SLACK_MIN_TIME_MS=200     # Min ms between requests (default: 200)
+# SLACK_MAX_CONCURRENT=3        # Max concurrent requests (default: 3)
+# SLACK_MIN_TIME_MS=200         # Min ms between requests (default: 200)
+# SLACK_REQUEST_TIMEOUT_MS=5000 # Per-request timeout in ms (default: 5000)
 ```
 
 #### Storage: SQLite or Postgres
@@ -63,10 +64,14 @@ There is a [`docker-compose.yml`](./docker-compose.yml) that brings up both:
 docker compose up -d
 ```
 
-Only the `db` service has a volume there, so `docker compose up -d --scale cachet=3`
-works as-is. Tuning knobs:
+Only the `db` service has a volume, so nothing in the app container needs to
+survive a restart and an orchestrator can run as many replicas of it as it
+likes. (This compose file publishes a fixed host port, so scaling it in place
+would collide on port 3000; give each replica its own port, or let a real
+orchestrator handle the routing.) Tuning knobs:
 
 ```bash
+POSTGRES_PASSWORD=pick-something # Required; compose refuses to start without it
 DATABASE_URL=postgres://cachet:password@db:5432/cachet
 DATABASE_MAX_CONNECTIONS=10 # Postgres pool size (default: 10, ignored by SQLite)
 ```
@@ -137,13 +142,17 @@ There were a few interesting hurdles that made this a bit more confusing though.
 }
 ```
 
-The second challenge (technically its not a challenge; more of a side project) was building a custom cache solution based on `Bun:sqlite`. It ended up being far easier than I thought it was going to be and I'm quite happy with how it turned out! It's fully typed which makes it awesome to use and blazing fast due to the native Bun implementation of sqlite. Using it is also dead simple. Just create a new instance of the cache with a db path, a ttl, and a fetch function for the emojis and you're good to go! Inserting and getting data is also super simple and the cache is fully typed!
+The second challenge (technically its not a challenge; more of a side project) was building a custom cache solution on top of a tiny database layer. It ended up being far easier than I thought it was going to be and I'm quite happy with how it turned out! It's fully typed which makes it awesome to use, and it speaks either `bun:sqlite` or Postgres behind the same interface, so the calling code never knows which one it got. Using it is also dead simple. Hand `SlackCache.create` a database to open, a ttl, and a fetch function for the emojis and you're good to go! Opening the database, creating the schema, running migrations and seeding the emoji list all happen in there, which is why it's an `async` factory rather than a plain `new`.
 
 I also added analytics tracking that stores every request with timestamps, response times, endpoints, and user agents. The database was getting pretty big (1.26M records) so I had to optimize the analytics queries and add data retention (30 days). The analytics dashboard splits the queries into separate endpoints so you get the basic stats immediately while the chart data loads in the background.
 
 ```typescript
-const cache = new SlackCache(
-  process.env.DATABASE_PATH ?? "./data/cachet.db",
+// `url` wins when set; `path` is the SQLite fallback. Same call either way.
+const cache = await SlackCache.create(
+  {
+    url: process.env.DATABASE_URL,
+    path: process.env.DATABASE_PATH ?? "./data/cachet.db",
+  },
   24,
   async () => {
     console.log("Scheduled emoji refresh starting");
@@ -269,7 +278,8 @@ no such rows and skips them.
 
 `bun test` covers SQLite. Point `TEST_DATABASE_URL` at a scratch Postgres to
 also run the suite against it, plus a parity suite that runs an identical
-workload through both engines and diffs the results:
+workload through both engines and diffs the results. CI sets this against a
+service container, so both backends are covered on every run:
 
 ```bash
 docker run -d --name cachet-pg -e POSTGRES_PASSWORD=cachet \

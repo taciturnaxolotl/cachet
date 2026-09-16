@@ -7,7 +7,6 @@ COPY . .
 FROM oven/bun:1-slim
 WORKDIR /app
 COPY --from=build /app .
-RUN mkdir -p /data
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
