@@ -49,32 +49,42 @@ export class HealthMonitor {
 			 FROM uptime_sessions WHERE end_time IS NULL`,
 		);
 
-		for (const session of orphanedSessions) {
+		if (orphanedSessions.length > 0) {
+			// Loop-invariant: the same aggregate for every orphan, so read it once
+			// rather than once per session.
 			const lastActivity = await this.db.get<{ last_bucket: number | null }>(
 				`SELECT ${asNumber("MAX(bucket) * 1000")} as last_bucket FROM traffic_10min`,
 			);
 
-			const estimatedEnd =
-				lastActivity?.last_bucket &&
-				lastActivity.last_bucket > session.start_time
-					? lastActivity.last_bucket
-					: session.start_time + 60000;
+			for (const session of orphanedSessions) {
+				const estimatedEnd =
+					lastActivity?.last_bucket &&
+					lastActivity.last_bucket > session.start_time
+						? lastActivity.last_bucket
+						: session.start_time + 60000;
 
-			const duration = estimatedEnd - session.start_time;
-			await this.db.run(
-				"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
-				[estimatedEnd, duration, session.id],
-			);
-			console.log(
-				`Closed orphaned session ${session.id} (likely crash), estimated duration: ${Math.round(duration / 1000)}s`,
-			);
+				const duration = estimatedEnd - session.start_time;
+				await this.db.run(
+					"UPDATE uptime_sessions SET end_time = ?, duration = ? WHERE id = ?",
+					[estimatedEnd, duration, session.id],
+				);
+				console.log(
+					`Closed orphaned session ${session.id} (likely crash), estimated duration: ${Math.round(duration / 1000)}s`,
+				);
+			}
 		}
 
 		const result = await this.db.get<{ id: number }>(
 			`INSERT INTO uptime_sessions (start_time) VALUES (?) RETURNING ${asNumber("id")} AS id`,
 			[now],
 		);
-		this.currentSessionId = result?.id;
+		if (!result) {
+			// INSERT ... RETURNING always yields a row; a null here means the write
+			// did not happen, and silently leaving the id unset would disable uptime
+			// tracking for the whole process lifetime.
+			throw new Error("Failed to open uptime session");
+		}
+		this.currentSessionId = result.id;
 	}
 
 	/**
