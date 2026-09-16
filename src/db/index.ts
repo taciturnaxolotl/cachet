@@ -7,10 +7,11 @@ import { dirname } from "node:path";
 import { PostgresDb } from "./postgres";
 import { legacyColumnPatches, schemaStatements } from "./schema";
 import { SqliteDb } from "./sqlite";
-import type { Db, Dialect } from "./types";
+import { type Db, dialectForUrl, unsupportedUrlMessage } from "./types";
 
-export type { Db, Dialect, Queryable, RunResult } from "./types";
 export { MAX_KEY_TEXT_LENGTH } from "./schema";
+export type { Db, Dialect, Queryable, RunResult } from "./types";
+export { dialectForUrl } from "./types";
 
 export interface DatabaseOptions {
 	/** Connection string for an external database. Takes precedence when set. */
@@ -19,13 +20,6 @@ export interface DatabaseOptions {
 	path?: string;
 	/** Postgres pool size. Ignored by SQLite. */
 	maxConnections?: number;
-}
-
-/** Recognises the connection strings that mean "use Postgres". */
-export function dialectForUrl(url: string): Dialect | null {
-	if (/^postgres(ql)?:\/\//i.test(url)) return "postgres";
-	if (/^(sqlite|file):/i.test(url)) return "sqlite";
-	return null;
 }
 
 /** Strips a `sqlite:`/`file:` scheme down to a plain filesystem path. */
@@ -53,9 +47,7 @@ export function createDb(options: DatabaseOptions): Db {
 		if (dialect === "sqlite") {
 			return openSqlite(sqlitePathFromUrl(url));
 		}
-		throw new Error(
-			`Unsupported DATABASE_URL scheme: "${url.split(":")[0]}". Expected postgres://, sqlite: or file:`,
-		);
+		throw new Error(unsupportedUrlMessage(url));
 	}
 
 	return openSqlite(path as string);

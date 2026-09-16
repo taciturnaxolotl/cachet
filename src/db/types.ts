@@ -15,6 +15,25 @@
 
 export type Dialect = "sqlite" | "postgres";
 
+/**
+ * Recognises the connection strings that mean "use Postgres", returning null
+ * for anything unsupported.
+ *
+ * Lives here rather than in `./index` so that config validation can call it
+ * without pulling both drivers -- and therefore `bun:sqlite` and Bun's SQL
+ * client -- into the module graph.
+ */
+export function dialectForUrl(url: string): Dialect | null {
+	if (/^postgres(ql)?:\/\//i.test(url)) return "postgres";
+	if (/^(sqlite|file):/i.test(url)) return "sqlite";
+	return null;
+}
+
+/** Single source of truth for the message both validation paths report. */
+export function unsupportedUrlMessage(url: string): string {
+	return `DATABASE_URL must start with postgres://, sqlite: or file:, got "${url.split(":")[0]}:"`;
+}
+
 export interface RunResult {
 	/** Rows affected by an INSERT/UPDATE/DELETE. */
 	changes: number;

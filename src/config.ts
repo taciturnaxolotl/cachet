@@ -3,7 +3,7 @@
  * validates required values, and exports a frozen typed config object.
  */
 
-import { dialectForUrl } from "./db";
+import { dialectForUrl, unsupportedUrlMessage } from "./db/types";
 
 export interface AppConfig {
 	readonly port: number;
@@ -60,13 +60,8 @@ function loadConfig(): AppConfig {
 	}
 
 	const databaseUrl = process.env.DATABASE_URL || null;
-	if (databaseUrl) {
-		const dialect = dialectForUrl(databaseUrl);
-		if (!dialect) {
-			errors.push(
-				`DATABASE_URL must start with postgres://, sqlite: or file:, got "${databaseUrl.split(":")[0]}:"`,
-			);
-		}
+	if (databaseUrl && !dialectForUrl(databaseUrl)) {
+		errors.push(unsupportedUrlMessage(databaseUrl));
 	}
 
 	const bearerToken = process.env.BEARER_TOKEN || null;
