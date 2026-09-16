@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { unlinkSync } from "node:fs";
 import { SlackCache } from "../cache";
-import type { DatabaseOptions } from "../db";
+import { backendsFor, resetBackend } from "./helpers/backends";
 
 const TEST_DB_PATH = "/tmp/cachet-test.db";
 
@@ -12,44 +11,23 @@ const TEST_DB_PATH = "/tmp/cachet-test.db";
  * database that is safe to write to, e.g.
  *   TEST_DATABASE_URL=postgres://cachet:cachet@127.0.0.1:5432/cachet bun test
  */
-const backends: Array<{
-	name: string;
-	options: DatabaseOptions;
-	cleanup: () => void;
-}> = [
-	{
-		name: "sqlite",
-		options: { path: TEST_DB_PATH },
-		cleanup: () => {
-			try {
-				unlinkSync(TEST_DB_PATH);
-			} catch {}
-		},
-	},
-];
-
-if (process.env.TEST_DATABASE_URL) {
-	backends.push({
-		name: "postgres",
-		options: { url: process.env.TEST_DATABASE_URL },
-		cleanup: () => {},
-	});
-}
+const backends = backendsFor(TEST_DB_PATH);
 
 for (const backend of backends) {
 	describe(`SlackCache integration (${backend.name})`, () => {
 		let cache: SlackCache;
 
 		beforeAll(async () => {
-			backend.cleanup();
+			// Reset before opening: schema creation, migrations and the uptime
+			// session all write during `create()`, so wiping afterwards would
+			// undo them.
+			await resetBackend(backend.options);
 			cache = await SlackCache.create(backend.options, 24);
-			// An external database survives between runs, so start from empty.
-			await cache.purgeAll();
 		});
 
 		afterAll(async () => {
 			await cache.close();
-			backend.cleanup();
+			await resetBackend(backend.options);
 		});
 
 		describe("user CRUD", () => {

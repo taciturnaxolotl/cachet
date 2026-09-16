@@ -13,26 +13,11 @@
  *   TEST_DATABASE_URL=postgres://cachet:cachet@127.0.0.1:5432/cachet bun test
  */
 
-import { SQL } from "bun";
 import { afterAll, describe, expect, it } from "bun:test";
-import { unlinkSync } from "node:fs";
 import { SlackCache } from "../cache";
+import { PG_URL, resetBackend, resetSqlite } from "./helpers/backends";
 
-const PG_URL = process.env.TEST_DATABASE_URL;
 const SQLITE_PATH = "/tmp/cachet-parity-test.db";
-
-/** Tables the app owns, in no particular order. */
-const TABLES = [
-	"users",
-	"emojis",
-	"traffic_10min",
-	"traffic_hourly",
-	"traffic_daily",
-	"user_agent_stats",
-	"referer_stats",
-	"uptime_sessions",
-	"migrations",
-];
 
 /** A fixed workload, so both backends see byte-identical input. */
 const FIXTURE = [
@@ -91,28 +76,18 @@ const FIXTURE = [
 	},
 ];
 
-async function truncatePostgres(url: string) {
-	const sql = new SQL({ url, max: 1 });
-	try {
-		for (const table of TABLES) {
-			await sql.unsafe(`TRUNCATE TABLE ${table}`);
-		}
-	} finally {
-		await sql.close();
-	}
-}
-
 /**
  * Runs the fixture against one backend and returns everything worth comparing.
  * Values that legitimately differ per process (wall-clock uptime, generated
  * UUIDs, absolute expiry timestamps) are reduced to backend-independent facts.
  */
 async function run(options: { url?: string; path?: string }) {
-	const cache = await SlackCache.create(options, 24);
+	// Reset BEFORE opening. Schema creation, migrations and the uptime session
+	// all write rows during `create()`, so wiping afterwards would silently
+	// undo them and leave the two backends in different states.
+	await resetBackend(options);
 
-	// Start from empty: the SQLite file is deleted by the caller, and an
-	// external database keeps whatever the last run left behind.
-	if (options.url) await truncatePostgres(options.url);
+	const cache = await SlackCache.create(options, 24);
 
 	await cache.insertUser(
 		"U123",
@@ -148,6 +123,20 @@ async function run(options: { url?: string; path?: string }) {
 	const uaCount = await cache.getUserAgentCount();
 	const referers = await cache.getReferers();
 	const health = await cache.detailedHealthCheck();
+
+	// Expiry is the field the whole cache turns on, so check it survived the
+	// round trip with real precision rather than just "some future date".
+	await cache.insertUser(
+		"UEXP",
+		"Expired",
+		"Expired Real",
+		"they/them",
+		"https://img/exp",
+		-1,
+	);
+	const expiredBeforePurge = await cache.getUser("UEXP");
+	const purgedExpired = await cache.purgeExpiredItems();
+
 	const purgedUser = await cache.purgeUserCache("U123");
 	const purgedEmojis = await cache.purgeEmojis();
 
@@ -160,10 +149,13 @@ async function run(options: { url?: string; path?: string }) {
 			realName: user.realName,
 			pronouns: user.pronouns,
 			imageUrl: user.imageUrl,
-			// The exact timestamp differs per run; that it survived the round
-			// trip as a real future date is the part that must match.
-			expirationIsValidDate: !Number.isNaN(user.expiration.getTime()),
-			expirationInFuture: user.expiration.getTime() > Date.now(),
+			// The exact timestamp differs per run, but the TTL does not. Bucketing
+			// to the hour keeps it wall-clock independent while still catching a
+			// backend that stores seconds instead of milliseconds, or truncates a
+			// BIGINT epoch -- both of which would still look like "a future date".
+			expirationHoursFromNow: Math.round(
+				(user.expiration.getTime() - Date.now()) / 3_600_000,
+			),
 		},
 		emoji: emoji && {
 			name: emoji.name,
@@ -195,23 +187,39 @@ async function run(options: { url?: string; path?: string }) {
 		uaCount,
 		referers,
 		databaseHealthy: health.checks.database.status,
+		// An already-expired user must read as absent and then actually be
+		// deleted -- an epoch comparison against a BIGINT column, and the most
+		// dialect-sensitive query in the app.
+		expiredUserReadsAsAbsent: expiredBeforePurge === null,
+		purgedExpired,
 		purgedUser,
 		purgedEmojis,
 	};
 }
 
+/** Asserts fractional response times survive storage, whatever the backend. */
+function expectFractionalLatency(result: Awaited<ReturnType<typeof run>>) {
+	expect(result.averageResponseTime).not.toBeNull();
+	expect(result.averageResponseTime).not.toBe(
+		Math.round(result.averageResponseTime as number),
+	);
+}
+
+afterAll(() => {
+	resetSqlite(SQLITE_PATH);
+});
+
+// Runs everywhere: response times come from `performance.now()` and are
+// fractional, so a backend storing them in an INTEGER column would round every
+// sample. Gating this on Postgres would mean never checking it in CI.
+describe("response time precision (sqlite)", () => {
+	it("stores fractional response times rather than rounding them", async () => {
+		expectFractionalLatency(await run({ path: SQLITE_PATH }));
+	}, 30000);
+});
+
 describe.skipIf(!PG_URL)("sqlite/postgres parity", () => {
-	afterAll(() => {
-		try {
-			unlinkSync(SQLITE_PATH);
-		} catch {}
-	});
-
 	it("returns identical results from both backends", async () => {
-		try {
-			unlinkSync(SQLITE_PATH);
-		} catch {}
-
 		const sqlite = await run({ path: SQLITE_PATH });
 		const postgres = await run({ url: PG_URL });
 
@@ -219,12 +227,9 @@ describe.skipIf(!PG_URL)("sqlite/postgres parity", () => {
 	}, 30000);
 
 	it("stores fractional response times rather than rounding them", async () => {
-		// A Postgres INTEGER column would silently round these to whole
-		// milliseconds; the schema uses DOUBLE PRECISION there for that reason.
-		const sqlite = await run({ path: SQLITE_PATH });
-		expect(sqlite.averageResponseTime).not.toBeNull();
-		expect(sqlite.averageResponseTime).not.toBe(
-			Math.round(sqlite.averageResponseTime as number),
-		);
+		// `total_response_time` is DOUBLE PRECISION on Postgres for this reason;
+		// an INTEGER column there would silently round every sample. Assert it
+		// against Postgres, which is the backend the comment is about.
+		expectFractionalLatency(await run({ url: PG_URL }));
 	}, 30000);
 });
