@@ -10,6 +10,21 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    # The Postgres half of the suite skips itself unless TEST_DATABASE_URL is
+    # set, so CI has to supply a real server or the backend goes unverified.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: cachet
+          POSTGRES_PASSWORD: cachet
+          POSTGRES_DB: cachet
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U cachet -d cachet"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
     steps:
       - uses: actions/checkout@v5
 
@@ -31,6 +46,7 @@ jobs:
         env:
           SLACK_SIGNING_SECRET: ci-test-secret
           SLACK_BOT_TOKEN: xoxb-ci-test-token
+          TEST_DATABASE_URL: postgres://cachet:cachet@127.0.0.1:5432/cachet
 
       - name: Build
         run: bun run build
