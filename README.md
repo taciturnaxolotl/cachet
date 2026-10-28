@@ -104,27 +104,27 @@ I also added analytics tracking that stores every request with timestamps, respo
 
 ```typescript
 const cache = new SlackCache(
-  process.env.DATABASE_PATH ?? "./data/cachet.db",
-  24,
-  async () => {
-    console.log("Scheduled emoji refresh starting");
-  },
+	process.env.DATABASE_PATH ?? "./data/cachet.db",
+	24,
+	async () => {
+		console.log("Scheduled emoji refresh starting");
+	},
 );
 
 // Set up background processing for user updates
 cache.setSlackWrapper(slackWrapper);
 
 await cache.insertUser(
-  "U062UG485EE",
-  "Kieran Klukas",
-  "he/him",
-  "https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
+	"U062UG485EE",
+	"Kieran Klukas",
+	"he/him",
+	"https://avatars.slack-edge.com/2024-11-30/8105375749571_53898493372773a01a1f_original.jpg",
 );
 
 await cache.insertEmoji(
-  "hackshark",
-  null,
-  "https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png",
+	"hackshark",
+	null,
+	"https://emoji.slack-edge.com/T0266FRGM/hackshark/0bf4771247471a48.png",
 );
 
 const emoji = await cache.getEmoji("hackshark");
@@ -144,8 +144,8 @@ The final bit was at this point a bit of a ridiculous one. I didn't like how hea
 
 ```typescript
 const slack = new SlackWrapper(
-  process.env.SLACK_BOT_TOKEN,
-  process.env.SLACK_SIGNING_SECRET,
+	process.env.SLACK_BOT_TOKEN,
+	process.env.SLACK_SIGNING_SECRET,
 );
 
 const user = await slack.getUserInfo("U062UG485EE");
@@ -153,13 +153,13 @@ const emojis = await slack.getEmojiList();
 
 // Manually purge a specific user's cache using the API endpoint
 const response = await fetch(
-  "https://cachet.example.com/users/U062UG485EE/purge",
-  {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
-    },
-  },
+	"https://cachet.example.com/users/U062UG485EE/purge",
+	{
+		method: "POST",
+		headers: {
+			Authorization: `Bearer ${process.env.BEARER_TOKEN}`,
+		},
+	},
 );
 const result = await response.json();
 // { message: "User cache purged", userId: "U062UG485EE", success: true }
@@ -225,14 +225,14 @@ To add a new route, you need to:
 
 ```typescript
 export const handleMyNewEndpoint: RouteHandlerWithAnalytics = async (
-  request,
-  recordAnalytics,
+	request,
+	recordAnalytics,
 ) => {
-  // Your handler logic here
-  const data = { message: "Hello from new endpoint" };
+	// Your handler logic here
+	const data = { message: "Hello from new endpoint" };
 
-  await recordAnalytics(200);
-  return Response.json(data);
+	await recordAnalytics(200);
+	return Response.json(data);
 };
 ```
 
