@@ -47,6 +47,13 @@ const QUEUE_INTERVAL_MS = 5 * 1000;
 const LRU_MAX_SIZE = 2000;
 const LRU_TTL_MS = 60_000;
 
+export const CRON_TIMEZONE = "Etc/UTC";
+export const CRON_SCHEDULES = {
+	purge: "45 * * * *",
+	emojiUpdate: "0 * * * *",
+	vacuum: "0 8 * * *",
+} as const;
+
 /**
  * Cache class for storing user and emoji data with automatic expiration.
  * Composes AnalyticsQueryService and HealthMonitor for separation of concerns.
@@ -243,11 +250,11 @@ class Cache {
 	}
 
 	private setupPurgeSchedule() {
-		const cronOptions = { timezone: "Etc/UTC" };
+		const cronOptions = { timezone: CRON_TIMEZONE };
 
 		this.cronTasks.push(
 			schedule(
-				"45 * * * *",
+				CRON_SCHEDULES.purge,
 				async () => {
 					try {
 						await this.purgeExpiredItems();
@@ -262,7 +269,7 @@ class Cache {
 
 		this.cronTasks.push(
 			schedule(
-				"0 * * * *",
+				CRON_SCHEDULES.emojiUpdate,
 				async () => {
 					try {
 						console.log("Scheduled emoji update starting...");
@@ -280,7 +287,7 @@ class Cache {
 
 		this.cronTasks.push(
 			schedule(
-				"0 8 * * *",
+				CRON_SCHEDULES.vacuum,
 				() => {
 					try {
 						console.log("Running scheduled VACUUM...");
