@@ -154,6 +154,51 @@ describe("SlackCache integration", () => {
 			expect(emoji).toBeNull();
 		});
 
+		it("drops a cached miss once the emoji is inserted", async () => {
+			expect(await cache.getEmoji("late-arrival")).toBeNull();
+			await cache.insertEmoji("late-arrival", null, "https://emoji.com/l.png");
+			expect((await cache.getEmoji("late-arrival"))?.imageUrl).toBe(
+				"https://emoji.com/l.png",
+			);
+		});
+
+		it("drops cached misses after a batch insert", async () => {
+			expect(await cache.getEmoji("late-batch")).toBeNull();
+			await cache.batchInsertEmojis([
+				{
+					name: "late-batch",
+					imageUrl: "https://emoji.com/lb.png",
+					alias: null,
+				},
+			]);
+			expect((await cache.getEmoji("late-batch"))?.imageUrl).toBe(
+				"https://emoji.com/lb.png",
+			);
+		});
+
+		it("refreshes the emoji list after inserts and purges", async () => {
+			const before = await cache.getAllEmojis();
+			expect(await cache.getAllEmojis()).toBe(before);
+
+			await cache.insertEmoji("list-new", null, "https://emoji.com/ln.png");
+			const afterInsert = await cache.getAllEmojis();
+			expect(afterInsert.map((e) => e.name)).toContain("list-new");
+
+			await cache.batchInsertEmojis([
+				{
+					name: "list-batch",
+					imageUrl: "https://emoji.com/lb2.png",
+					alias: null,
+				},
+			]);
+			expect((await cache.getAllEmojis()).map((e) => e.name)).toContain(
+				"list-batch",
+			);
+
+			await cache.purgeEmojis();
+			expect(await cache.getAllEmojis()).toEqual([]);
+		});
+
 		it("purges all emojis", async () => {
 			await cache.insertEmoji("purge1", null, "https://emoji.com/p1.png");
 			await cache.insertEmoji("purge2", null, "https://emoji.com/p2.png");

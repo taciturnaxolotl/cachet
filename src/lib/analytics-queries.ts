@@ -1,4 +1,4 @@
-import type { Database, Statement } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import type {
 	ChartData,
 	EssentialStatsData,
@@ -6,10 +6,12 @@ import type {
 	UserAgentData,
 } from "../types/analytics";
 import { AnalyticsCache } from "../types/analytics";
-
-const SECONDS_PER_10MIN = 600;
-const SECONDS_PER_HOUR = 3600;
-const SECONDS_PER_DAY = 86400;
+import {
+	AnalyticsWriter,
+	SECONDS_PER_10MIN,
+	SECONDS_PER_DAY,
+	SECONDS_PER_HOUR,
+} from "./analytics-writer";
 
 /**
  * Selects the appropriate bucket table based on time range
@@ -83,82 +85,14 @@ export function groupEndpoint(endpoint: string): string {
 export class AnalyticsQueryService {
 	private db: Database;
 	private typedAnalyticsCache: AnalyticsCache;
-
-	// Prepared statements for hot paths
-	private stmtTraffic10min!: Statement;
-	private stmtTrafficHourly!: Statement;
-	private stmtTrafficDaily!: Statement;
-	private stmtUserAgent!: Statement;
-	private stmtReferer!: Statement;
-
-	// Write buffer for batched analytics recording
-	private writeBuffer: Array<{
-		bucket10min: number;
-		bucketHour: number;
-		bucketDay: number;
-		endpoint: string;
-		statusCode: number;
-		respTime: number;
-		userAgent: string | null;
-		refererHost: string | null;
-		nowMs: number;
-	}> = [];
-	private flushTimer: ReturnType<typeof setTimeout> | null = null;
-	private readonly FLUSH_INTERVAL_MS = 50;
-	private readonly MAX_BUFFER_SIZE = 200;
+	private writer: AnalyticsWriter;
 
 	constructor(db: Database) {
 		this.db = db;
 		this.typedAnalyticsCache = new AnalyticsCache();
-		this.initPreparedStatements();
+		this.writer = new AnalyticsWriter(db);
 	}
 
-	private initPreparedStatements() {
-		this.stmtTraffic10min = this.db.prepare(`
-			INSERT INTO traffic_10min (bucket, endpoint, status_code, hits, total_response_time)
-			VALUES (?1, ?2, ?3, 1, ?4)
-			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				hits = hits + 1,
-				total_response_time = total_response_time + ?4
-		`);
-
-		this.stmtTrafficHourly = this.db.prepare(`
-			INSERT INTO traffic_hourly (bucket, endpoint, status_code, hits, total_response_time)
-			VALUES (?1, ?2, ?3, 1, ?4)
-			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				hits = hits + 1,
-				total_response_time = total_response_time + ?4
-		`);
-
-		this.stmtTrafficDaily = this.db.prepare(`
-			INSERT INTO traffic_daily (bucket, endpoint, status_code, hits, total_response_time)
-			VALUES (?1, ?2, ?3, 1, ?4)
-			ON CONFLICT(bucket, endpoint, status_code) DO UPDATE SET 
-				hits = hits + 1,
-				total_response_time = total_response_time + ?4
-		`);
-
-		this.stmtUserAgent = this.db.prepare(`
-			INSERT INTO user_agent_stats (user_agent, hits, last_seen)
-			VALUES (?1, 1, ?2)
-			ON CONFLICT(user_agent) DO UPDATE SET 
-				hits = hits + 1,
-				last_seen = MAX(last_seen, ?2)
-		`);
-
-		this.stmtReferer = this.db.prepare(`
-			INSERT INTO referer_stats (referer_host, hits, last_seen)
-			VALUES (?1, 1, ?2)
-			ON CONFLICT(referer_host) DO UPDATE SET 
-				hits = hits + 1,
-				last_seen = MAX(last_seen, ?2)
-		`);
-	}
-
-	/**
-	 * Records a request by buffering it for batched writing.
-	 * Entries are flushed every 50ms or when the buffer reaches MAX_BUFFER_SIZE.
-	 */
 	recordRequest(
 		endpoint: string,
 		statusCode: number,
@@ -166,99 +100,11 @@ export class AnalyticsQueryService {
 		responseTime?: number,
 		referer?: string,
 	): void {
-		const now = Math.floor(Date.now() / 1000);
-		const bucket10min = now - (now % SECONDS_PER_10MIN);
-		const bucketHour = now - (now % SECONDS_PER_HOUR);
-		const bucketDay = now - (now % SECONDS_PER_DAY);
-		const respTime = responseTime || 0;
-		const nowMs = Date.now();
-
-		let refererHost: string | null = null;
-		if (referer) {
-			// Fast host extraction: skip "https://" then take until next "/"
-			const i = referer.indexOf("://");
-			if (i !== -1) {
-				const start = i + 3;
-				const end = referer.indexOf("/", start);
-				refererHost =
-					end === -1 ? referer.substring(start) : referer.substring(start, end);
-			}
-		}
-
-		this.writeBuffer.push({
-			bucket10min,
-			bucketHour,
-			bucketDay,
-			endpoint,
-			statusCode,
-			respTime,
-			userAgent: userAgent || null,
-			refererHost,
-			nowMs,
-		});
-
-		if (this.writeBuffer.length >= this.MAX_BUFFER_SIZE) {
-			// Defer flush so it doesn't block the current request's response
-			if (!this.flushTimer) {
-				this.flushTimer = setTimeout(() => {
-					this.flushWriteBuffer();
-				}, 0);
-			}
-		} else if (!this.flushTimer) {
-			this.flushTimer = setTimeout(() => {
-				this.flushWriteBuffer();
-			}, this.FLUSH_INTERVAL_MS);
-		}
+		this.writer.record(endpoint, statusCode, userAgent, responseTime, referer);
 	}
 
-	/**
-	 * Flushes the write buffer in a single transaction
-	 */
 	flushWriteBuffer(): void {
-		if (this.flushTimer) {
-			clearTimeout(this.flushTimer);
-			this.flushTimer = null;
-		}
-
-		if (this.writeBuffer.length === 0) return;
-
-		const batch = this.writeBuffer;
-		this.writeBuffer = [];
-
-		try {
-			this.db.transaction(() => {
-				for (const entry of batch) {
-					this.stmtTraffic10min.run(
-						entry.bucket10min,
-						entry.endpoint,
-						entry.statusCode,
-						entry.respTime,
-					);
-					this.stmtTrafficHourly.run(
-						entry.bucketHour,
-						entry.endpoint,
-						entry.statusCode,
-						entry.respTime,
-					);
-					this.stmtTrafficDaily.run(
-						entry.bucketDay,
-						entry.endpoint,
-						entry.statusCode,
-						entry.respTime,
-					);
-
-					if (entry.userAgent) {
-						this.stmtUserAgent.run(entry.userAgent, entry.nowMs);
-					}
-
-					if (entry.refererHost) {
-						this.stmtReferer.run(entry.refererHost, entry.nowMs);
-					}
-				}
-			})();
-		} catch (error) {
-			console.error("Error flushing analytics write buffer:", error);
-		}
+		this.writer.flush();
 	}
 
 	/**
@@ -273,6 +119,8 @@ export class AnalyticsQueryService {
 		if (cached) {
 			return cached;
 		}
+
+		this.writer.flush();
 
 		const { table, bucketSize } = selectBucketTable(days);
 		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
@@ -619,6 +467,8 @@ export class AnalyticsQueryService {
 			return cached;
 		}
 
+		this.writer.flush();
+
 		const { table, bucketSize } = selectBucketTable(days);
 		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
 		const alignedCutoff = cutoffBucket - (cutoffBucket % bucketSize);
@@ -670,6 +520,8 @@ export class AnalyticsQueryService {
 		if (cached) {
 			return cached;
 		}
+
+		this.writer.flush();
 
 		const { table, bucketSize } = selectBucketTable(days);
 		const cutoffBucket = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;

@@ -237,6 +237,8 @@ export class AnalyticsCache {
 	}
 
 	private setCacheEntry(key: string, data: AnalyticsCacheData): void {
+		// Callers share cached results, and cachedJson keys bodies by identity
+		Object.freeze(data.data);
 		this.cache.set(key, {
 			data,
 			timestamp: Date.now(),

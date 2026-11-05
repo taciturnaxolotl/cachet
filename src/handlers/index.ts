@@ -6,6 +6,7 @@ import { getEmojiUrl } from "../../utils/emojiHelper";
 import type { SlackCache } from "../cache";
 import { config } from "../config";
 import type { RouteHandlerWithAnalytics } from "../lib/analytics-wrapper";
+import { cachedJson, corsRedirect } from "../lib/fast-response";
 import { lastSegment, pathSegment, queryParam } from "../lib/fast-url";
 import { jsonError } from "../lib/http-errors";
 
@@ -132,7 +133,7 @@ export function createHandlers(cache: SlackCache) {
 		}
 
 		recordAnalytics(200);
-		return Response.json(user);
+		return cachedJson(user);
 	};
 
 	const handleUserRedirect: RouteHandlerWithAnalytics = async (
@@ -145,19 +146,14 @@ export function createHandlers(cache: SlackCache) {
 		if (!user?.imageUrl) {
 			cache.queueUserUpdate(userId);
 			recordAnalytics(307);
-			return new Response(null, {
-				status: 307,
-				headers: {
-					Location: "https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
-				},
-			});
+			return corsRedirect(
+				307,
+				"https://l4-bucket.dunkirk.sh/5DjfoBI58Pfw.webp",
+			);
 		}
 
 		recordAnalytics(302);
-		return new Response(null, {
-			status: 302,
-			headers: { Location: user.imageUrl },
-		});
+		return corsRedirect(302, user.imageUrl);
 	};
 
 	const handlePurgeUser: RouteHandlerWithAnalytics = async (
@@ -184,7 +180,7 @@ export function createHandlers(cache: SlackCache) {
 	) => {
 		const emojis = await cache.getAllEmojis();
 		recordAnalytics(200);
-		return Response.json(emojis);
+		return cachedJson(emojis);
 	};
 
 	const handlePurgeEmojis: RouteHandlerWithAnalytics = async (
@@ -234,7 +230,7 @@ export function createHandlers(cache: SlackCache) {
 		}
 
 		recordAnalytics(200);
-		return Response.json(emoji);
+		return cachedJson(emoji);
 	};
 
 	const handleEmojiRedirect: RouteHandlerWithAnalytics = async (
@@ -257,17 +253,11 @@ export function createHandlers(cache: SlackCache) {
 			}
 
 			recordAnalytics(302);
-			return new Response(null, {
-				status: 302,
-				headers: { Location: nativeEmojiUrl },
-			});
+			return corsRedirect(302, nativeEmojiUrl);
 		}
 
 		recordAnalytics(302);
-		return new Response(null, {
-			status: 302,
-			headers: { Location: emoji.imageUrl },
-		});
+		return corsRedirect(302, emoji.imageUrl);
 	};
 
 	const handleResetCache: RouteHandlerWithAnalytics = async (
@@ -290,7 +280,7 @@ export function createHandlers(cache: SlackCache) {
 
 		const stats = await cache.getEssentialStats(days);
 		recordAnalytics(200);
-		return Response.json(stats);
+		return cachedJson(stats);
 	};
 
 	const handleGetChartData: RouteHandlerWithAnalytics = async (
@@ -301,7 +291,7 @@ export function createHandlers(cache: SlackCache) {
 
 		const chartData = await cache.getChartData(days);
 		recordAnalytics(200);
-		return Response.json(chartData);
+		return cachedJson(chartData);
 	};
 
 	const handleGetUserAgents: RouteHandlerWithAnalytics = async (

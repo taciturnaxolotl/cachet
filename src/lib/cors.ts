@@ -16,8 +16,10 @@ const CORS_ENTRIES = Object.entries(CORS_HEADERS);
 /**
  * Adds CORS headers to a response.
  * Tries in-place mutation first; falls back to new Response if headers are immutable.
+ * Responses built with CORS headers already in place are returned untouched.
  */
 export function addCorsHeaders(response: Response): Response {
+	if (response.headers.has("access-control-allow-origin")) return response;
 	try {
 		for (const [name, value] of CORS_ENTRIES) {
 			response.headers.set(name, value);
